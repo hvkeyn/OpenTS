@@ -40,6 +40,7 @@
 #include "winstub.h"
 
 #include "dialog.hh"
+#include "vidscale.h"
 #include "dsurface.h"
 #include "_surface.h"
 
@@ -604,6 +605,30 @@ void RestateMission::Do_Custom_Draw(Surface *surface)
 
 
 /// <summary>
+/// Where the mouse is, measured on the briefing page rather than on the frame.
+/// The page is stretched onto the frame when it is shown, so a position on the frame maps
+/// back onto the page by the same ratio.
+/// </summary>
+static Point2D Page_Mouse_Point(void)
+{
+	POINT point;
+	GetCursorPos(&point);
+	Screen_Point_To_Game(point);
+
+	if (BriefingPage == NULL || HiddenSurface == NULL) {
+		return(Point2D(point.x, point.y));
+	}
+
+	int const width = HiddenSurface->Get_Width();
+	int const height = HiddenSurface->Get_Height();
+
+	return(Point2D(
+		point.x * BriefingPage->Get_Width() / (width > 0 ? width : 1),
+		point.y * BriefingPage->Get_Height() / (height > 0 ? height : 1)));
+}
+
+
+/// <summary>
 /// Handles the player's input during the mission restatement.
 /// This routine polls the button list until the player picks one of the offered choices,
 /// or dismisses the page with the space bar or the escape key.
@@ -620,7 +645,8 @@ bool RestateMission::User_Input(void)
 	do {
 		Wait_For_Focus();
 		if (ButtonList != NULL) {
-			input = ButtonList->Input();
+			// the buttons are laid out on the page, so the mouse is measured there too
+			input = ButtonList->Input_At(Page_Mouse_Point());
 		} else {
 			if (Keyboard->Check() != KN_NONE) {
 				input = Keyboard->Get();

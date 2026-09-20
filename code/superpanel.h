@@ -145,6 +145,8 @@ class SuperPanelClass
 		bool Place_Seed(Cell const & cell, int radius, char const * overlay_name);
 		bool Reveal_Area(Cell const & cell, int radius);
 		bool Barrage(Cell const & cell, int shells, int radius, int strength, char const * warhead_name);
+		bool Launch_Hunter_Seeker(void);
+		bool Pulse_Area(Cell const & cell, int spread, int seconds);
 		bool Damage_Area(Cell const & cell, int radius, int strength, char const * warhead_name, bool tiberium);
 
 	public:

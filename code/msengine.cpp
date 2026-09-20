@@ -345,6 +345,10 @@ void MSEngine::Present_Page(void)
 		return;
 	}
 
+	// nothing has been drawn onto the page since it was last shown, so there is nothing
+	// to put up
+	if (RectCount == 0) return;
+
 	// a change of size is the one blit these surfaces stretch rather than copy
 	DebugString("Present_Page: %dx%d page onto a %dx%d frame\n",
 		StagedPage->Get_Width(), StagedPage->Get_Height(),

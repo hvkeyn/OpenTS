@@ -124,6 +124,14 @@ class GadgetClass : public LinkClass
 		**	Gadget list management functions.
 		*/
 		virtual KeyNumType Input(void);
+
+		///
+		/// Runs the gadget list with the mouse measured somewhere other than the frame. A
+		/// screen that draws onto a page of its own and stretches it onto the frame has to
+		/// measure the mouse on the page too, or its buttons are hit where they are not drawn.
+		///
+		KeyNumType Input_At(Point2D const & point);
+
 		virtual void Draw_All(bool forced=true);
 		virtual void Delete_List(void);
 		virtual ControlClass * Extract_Gadget(unsigned id);
@@ -147,6 +155,12 @@ class GadgetClass : public LinkClass
 		virtual bool Is_To_Redraw(void) {return(IsToRepaint);}
 		virtual void Set_Position(int x, int y);
 		virtual void Set_Size(int w, int h);
+
+		///
+		/// Runs one pass of the gadget list for a key and a mouse position that have already
+		/// been worked out. Input and Input_At are the two ways of doing that.
+		///
+		KeyNumType Process_Input(KeyNumType key, int mousex, int mousey);
 
 		void Set_Flags(unsigned flags) { Flags = flags; }
 

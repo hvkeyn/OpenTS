@@ -494,19 +494,6 @@ KeyNumType GadgetClass::Input(void)
 {
 	int mousex, mousey;
 	KeyNumType key;
-	unsigned flags;
-	int forced = false;
-
-	/*
-	**	Record this list so that a forced redraw only occurs the FIRST time the
-	**	gadget list is passed to this routine.
-	*/
-	if (LastList != this) {
-		LastList = this;
-		forced = true;
-		StuckOn = NULL;
-		Focused = NULL;
-	}
 
 	/*
 	**	Fetch any pending keyboard input.
@@ -528,6 +515,56 @@ KeyNumType GadgetClass::Input(void)
 	} else {
 	   mousex = Get_Mouse_X();
 	   mousey = Get_Mouse_Y();
+	}
+
+	return(Process_Input(key, mousex, mousey));
+}
+
+
+/// <summary>
+/// Runs the gadget list with the mouse measured on a staged page.
+/// The position from the queue is in frame coordinates and the gadgets are not, so the
+/// position handed in here is the one that is used for the click as well as for the
+/// hover.
+/// </summary>
+/// <param name="point">Where the mouse is, in the coordinates the gadgets are laid
+/// out in.</param>
+/// <returns>The key that the processing produced.</returns>
+KeyNumType GadgetClass::Input_At(Point2D const & point)
+{
+	KeyNumType key = Keyboard->Check();
+	if (key != 0) {
+		key = Keyboard->Get();
+	}
+
+	return(Process_Input(key, point.X, point.Y));
+}
+
+
+/// <summary>
+/// Runs one pass of the gadget list.
+/// Use this routine when the pending key and the mouse position have already been
+/// worked out; Input and Input_At are the two ways of doing that.
+/// </summary>
+/// <param name="key">The keyboard or mouse event that has been fetched.</param>
+/// <param name="mousex">Where the mouse is, in the coordinates the gadgets are laid
+/// out in.</param>
+/// <param name="mousey">The same, vertically.</param>
+/// <returns>The key that the processing produced.</returns>
+KeyNumType GadgetClass::Process_Input(KeyNumType key, int mousex, int mousey)
+{
+	unsigned flags;
+	int forced = false;
+
+	/*
+	**	Record this list so that a forced redraw only occurs the FIRST time the
+	**	gadget list is passed to this routine.
+	*/
+	if (LastList != this) {
+		LastList = this;
+		forced = true;
+		StuckOn = NULL;
+		Focused = NULL;
 	}
 
 	/*

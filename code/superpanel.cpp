@@ -17,6 +17,7 @@
 #include "cell.h"
 #include "ccrand.h"
 #include "combat.h"
+#include "empulse.h"
 #include "conquer.h"
 #include "crc.h"
 #include "dialog.h"
@@ -33,16 +34,21 @@
 #include "building.h"
 #include "builtype.h"
 #include "aircraft.h"
+#include "anim.h"
+#include "animtype.h"
 #include "airctype.h"
 #include "houstype.h"
 #include "rgb.h"
+#include "rules.h"
 #include "scheme.h"
+#include "side.h"
 #include "_convert.h"
 #include "_mixfile.h"
 #include "mixfile.h"
 #include "_rect.h"
 #include "map.h"
 #include "overlay.h"
+#include "_rules.h"
 #include "overtype.h"
 #include "scenario.h"
 #include "savestream.h"
@@ -905,11 +911,15 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_EM_PULSE:
-				done = Damage_Area(cell, 4, 150, "AP", false);
+				// a real electromagnetic pulse: everything mechanical in the area is left
+				// standing dead for a while, sparks and all
+				done = Pulse_Area(cell, 4, 10);
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_HUNTER_SEEKER:
-				done = Damage_Area(cell, 1, 600, "AP", false);
+				// the drone comes in from the edge of the map and picks its own target, so the
+				// place the player aimed at is where it starts looking
+				done = Launch_Hunter_Seeker();
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_TIBERIUM_SEED:
@@ -974,6 +984,30 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 /// is what used to leave an ability with nothing to show for it.
 /// </summary>
 /// <returns>Was somewhere found for the unit to stand?</returns>
+/// <summary>
+/// Throws up the dust of an arrival from underground, so that a squad that tunnels up is
+/// seen to come out of the ground rather than simply appearing on it.
+/// </summary>
+static void Dig_Out_Dust(Cell const & cell)
+{
+	AnimType type = AnimTypeClass::From_Name("S_TUMU30");
+	if (type == ANIM_NONE) return;
+
+	new AnimClass(AnimTypes[type], Coord(cell), Random_Pick(0, 6));
+}
+
+
+/// <summary>
+/// Mark where a drop pod came down.
+/// </summary>
+static void Drop_Pod_Dust(Cell const & cell)
+{
+	if (Rule == NULL || Rule->DropPod.Count() == 0) return;
+
+	new AnimClass(Rule->DropPod[Random_Pick(0, Rule->DropPod.Count() - 1)], Coord(cell));
+}
+
+
 static bool Land_Here(FootClass * object, Cell const & cell)
 {
 	for (int radius = 0; radius <= 5; radius++) {
@@ -1037,7 +1071,14 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 			InfantryClass * inf = (InfantryClass *)InfantryTypes[itype]->Create_One_Of(PlayerPtr);
 			if (inf != NULL) {
 				inf->Veterancy.Set_Elite(true);
+				Cell landed = cell;
 				if (Land_Here(inf, cell)) {
+					landed = inf->PositionCoord.As_Cell();
+					if (ability.Delivery == SuperPanelAbilityClass::DELIVERY_UNDERGROUND) {
+						Dig_Out_Dust(landed);
+					} else {
+						Drop_Pod_Dust(landed);
+					}
 					placed++;
 				} else {
 					delete inf;
@@ -1048,6 +1089,12 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 			if (utype != UNIT_NONE && House_Owns(UnitTypes[utype])) {
 				UnitClass * unit = new UnitClass(UnitTypes[utype], PlayerPtr);
 				if (unit != NULL && Land_Here(unit, cell)) {
+					Cell landed = unit->PositionCoord.As_Cell();
+					if (ability.Delivery == SuperPanelAbilityClass::DELIVERY_UNDERGROUND) {
+						Dig_Out_Dust(landed);
+					} else {
+						Drop_Pod_Dust(landed);
+					}
 					placed++;
 				} else {
 					delete unit;
@@ -1087,6 +1134,62 @@ bool SuperPanelClass::Place_Seed(Cell const & cell, int radius, char const * ove
 	}
 
 	return(placed > 0);
+}
+
+
+/// <summary>
+/// Sets off an electromagnetic pulse.
+/// Everything mechanical inside the circle is paralysed for the length of time asked for,
+/// which is what the pulse cannon of the game does when it fires.
+/// </summary>
+/// <param name="cell">The middle of the pulse.</param>
+/// <param name="spread">The radius of the pulse, in cells.</param>
+/// <param name="seconds">How long the machinery stays dead.</param>
+/// <returns>Was a pulse set off?</returns>
+bool SuperPanelClass::Pulse_Area(Cell const & cell, int spread, int seconds)
+{
+	if (spread <= 0 || seconds <= 0) return(false);
+
+	new EMPulseClass(cell, spread, seconds * TICKS_PER_SECOND, NULL);
+
+	return(true);
+}
+
+
+/// <summary>
+/// Sends Nod's homing drone in from the edge of the map.
+/// The drone finds a target of its own once it is up, which is what it is for; the
+/// building that normally launches it is not needed.
+/// </summary>
+/// <returns>Was a drone launched?</returns>
+bool SuperPanelClass::Launch_Hunter_Seeker(void)
+{
+	if (PlayerPtr == NULL) return(false);
+
+	SideClass const * side = PlayerPtr->Acted_Side();
+	if (side == NULL || side->HunterSeeker == NULL) {
+		DebugString("SuperPanel: this side has no hunter seeker\n");
+		return(false);
+	}
+
+	Cell entry = Map.Calculated_Cell(PlayerPtr->Control.Edge, CELL_NONE, CELL_NONE, SPEED_WINGED);
+	if (entry == CELL_NONE) {
+		entry = Map.Calculated_Cell(SOURCE_NORTH, CELL_NONE, CELL_NONE, SPEED_WINGED);
+	}
+
+	UnitClass * drone = new UnitClass(side->HunterSeeker, PlayerPtr);
+	if (drone == NULL) return(false);
+
+	if (!drone->Unlimbo(Coord(entry), DIR_E)) {
+		delete drone;
+		return(false);
+	}
+
+	drone->Locomotion->Acquire_Hunter_Seeker_Target();
+	drone->Assign_Mission(MISSION_ATTACK);
+	drone->Commence();
+
+	return(true);
 }
 
 

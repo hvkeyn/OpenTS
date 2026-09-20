@@ -506,7 +506,10 @@ bool DSurface::Blit_From(Rect const & dcliprect, Rect const & destrect, Surface 
 	 */
 	GdiFlush();
 
-	SetStretchBltMode(GDIDC, COLORONCOLOR);
+	// a smoother stretch than the raw one: a picture that is scaled up to the frame is
+	// otherwise drawn in blocks the size of the scaling factor
+	SetStretchBltMode(GDIDC, HALFTONE);
+	SetBrushOrgEx(GDIDC, 0, 0, NULL);
 	bool result = StretchBlt(GDIDC, drect.X, drect.Y, drect.Width, drect.Height,
 		source.GDIDC, srect.X, srect.Y, srect.Width, srect.Height, SRCCOPY) != 0;
 
