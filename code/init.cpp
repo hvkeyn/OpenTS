@@ -727,6 +727,15 @@ void Prepare_Side_Roster(void)
 /// <returns>bool; Is the campaign available for the player to select?</returns>
 static bool Campaign_Available(CampaignClass * campaign)
 {
+	/*
+	**	A campaign that names no opening scenario is a heading in the campaign list rather
+	**	than something to be played, which is how the control files group the campaigns
+	**	that ship with the game alongside the ones a mod adds.
+	*/
+	if (campaign->ScenarioName[0] == '\0') {
+		return(false);
+	}
+
 	if (Addon_Enabled(ADDON_ANY) == true) {
 		if (campaign->RequiredAddon == ADDON_BASE_GAME) {
 			return(false);
