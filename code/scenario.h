@@ -285,7 +285,12 @@ class ScenarioClass {
 		**	displayed when the player commands the "restate mission
 		**	objectives" operation.
 		*/
-		char BriefingText[1024];
+		/*
+		 * The briefing the mission carries. Russian briefings run past a thousand characters,
+		 * so the room kept for the text is generous; only the text itself is written to a save
+		 * file, so a wider buffer costs nothing.
+		 */
+		char BriefingText[8192];
 
 		/*
 		**	This is the theme to start playing at the beginning of the action

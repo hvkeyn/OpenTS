@@ -219,7 +219,7 @@ class RestateMission : public MSEngine {
 		MyButton * Get_Button(unsigned int id);
 
 		ScenarioClass *Scenario;
-		char BriefingText[1024];
+		char BriefingText[8192];
 		char * String;
 		Rect StringRect;
 		int CenterX;
