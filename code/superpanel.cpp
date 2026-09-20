@@ -46,6 +46,7 @@
 #include "_mixfile.h"
 #include "mixfile.h"
 #include "_rect.h"
+#include "_xmouse.h"
 #include "map.h"
 #include "overlay.h"
 #include "_rules.h"
@@ -59,6 +60,7 @@
 #include "suprtype.h"
 #include "surface.h"
 #include "techno.h"
+#include "tiberium.hh"
 #include "unit.h"
 #include "unittype.h"
 #include "vox.h"
@@ -72,6 +74,9 @@
 SuperPanelClass SuperPanel;
 
 static char const * const SUPERPOWERS_INI = "SUPERPOWERS.INI";
+
+/// Sends home the aircraft that were lent to the player once their time is up.
+static void Check_Loans(void);
 static char const * const PANEL_SECTION = "Panel";
 static int const POOL_LIMIT = 48;			// how many abilities the file may offer in all
 
@@ -96,6 +101,11 @@ static int const PANEL_CELL_BACK = DSurface::Build_Hicolor_Pixel(18, 18, 18);
 static int const PANEL_FRAME_READY = DSurface::Build_Hicolor_Pixel(0, 190, 0);
 static int const PANEL_FRAME_WAITING = DSurface::Build_Hicolor_Pixel(96, 96, 96);
 static int const PANEL_FRAME_AIMING = DSurface::Build_Hicolor_Pixel(255, 220, 0);
+static int const PANEL_BAR_READY = DSurface::Build_Hicolor_Pixel(0, 220, 0);
+static int const PANEL_BAR_CHARGING = DSurface::Build_Hicolor_Pixel(150, 130, 0);
+
+/// The width of the charge bar that runs down the right edge of a square.
+static int const PANEL_GAUGE_WIDTH = 4;
 
 /// The wash laid over the part of an icon that has not charged up yet.
 static RGBClass const PANEL_SHADE(0, 0, 0);
@@ -820,8 +830,9 @@ void SuperPanelClass::Reset(void)
 void SuperPanelClass::Logic(void)
 {
 	// the set is looked at again now and then, for the powers the player may have taken
-	// over from the other side
+	// over from the other side, and the aircraft on loan are sent home when their time is up
 	Refresh();
+	Check_Loans();
 
 	for (int index = 0; index < SlotCount; index++) {
 		Slots[index].Charge_Up();
@@ -891,6 +902,26 @@ static bool point_in_rect(Point2D const & point, Rect const & rect)
 {
 	return(point.X >= rect.X && point.X < rect.X + rect.Width
 		&& point.Y >= rect.Y && point.Y < rect.Y + rect.Height);
+}
+
+
+/// <summary>
+/// Which square the mouse is resting on.
+/// The mouse is asked for where it is on the frame, while the strip is measured against the
+/// battlefield it is drawn on, so the battlefield's own corner is taken off it first.
+/// </summary>
+/// <returns>The index of the square, or -1 when the mouse is elsewhere.</returns>
+int SuperPanelClass::Square_Under_Mouse(Rect const & strip) const
+{
+	Point2D mouse(Get_Mouse_X() - TacticalRect.X, Get_Mouse_Y());
+
+	for (int index = 0; index < SlotCount; index++) {
+		if (point_in_rect(mouse, Cell_Rect(index, strip))) {
+			return(index);
+		}
+	}
+
+	return(-1);
 }
 
 
@@ -1052,7 +1083,7 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_TIBERIUM_SEED:
-				done = Place_Seed(cell, 3, "TIB01");
+				done = Place_Seed(cell, 3, 5);
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_RECON:
@@ -1144,6 +1175,76 @@ static void Drop_Pod_Dust(Cell const & cell)
 /// mission.
 /// </summary>
 /// <returns>Was somewhere found for the aircraft to appear?</returns>
+/*
+** Aircraft the panel has lent to the player, with the time they have left before they go
+** home. A pointer kept from one frame to the next has to be checked against the world
+** before it is used again: an aircraft that was shot down is gone.
+*/
+static TechnoClass * Loaned_Craft[6];
+static int Loaned_Ticks[6];
+
+static int const LOAN_SECONDS = 60;
+
+/// <summary>
+/// Is this object still in the world?
+/// </summary>
+static bool Still_Here(TechnoClass const * object)
+{
+	for (int index = 0; index < Aircraft.Count(); index++) {
+		if (Aircraft[index] == object) return(true);
+	}
+	for (int index = 0; index < Units.Count(); index++) {
+		if (Units[index] == object) return(true);
+	}
+	for (int index = 0; index < Infantry.Count(); index++) {
+		if (Infantry[index] == object) return(true);
+	}
+
+	return(false);
+}
+
+
+/// <summary>
+/// Notes an aircraft as lent, so that it is sent home when its time runs out.
+/// </summary>
+static void Lend_Craft(TechnoClass * craft)
+{
+	for (int index = 0; index < 6; index++) {
+		if (Loaned_Craft[index] == NULL || !Still_Here(Loaned_Craft[index])) {
+			Loaned_Craft[index] = craft;
+			Loaned_Ticks[index] = LOAN_SECONDS * TICKS_PER_SECOND;
+			return;
+		}
+	}
+}
+
+
+/// <summary>
+/// Sends home every lent aircraft whose time is up, so that a strike is a strike and not a
+/// free air force.
+/// </summary>
+static void Check_Loans(void)
+{
+	for (int index = 0; index < 6; index++) {
+		if (Loaned_Craft[index] == NULL) continue;
+
+		if (!Still_Here(Loaned_Craft[index])) {
+			Loaned_Craft[index] = NULL;
+			continue;
+		}
+
+		if (Loaned_Ticks[index] > 0) {
+			Loaned_Ticks[index]--;
+			continue;
+		}
+
+		Loaned_Craft[index]->Assign_Mission(MISSION_RETREAT);
+		Loaned_Craft[index]->Commence();
+		Loaned_Craft[index] = NULL;
+	}
+}
+
+
 static bool Fly_Here(AircraftClass * craft, Cell const & cell)
 {
 	if (craft == NULL) return(false);
@@ -1172,7 +1273,7 @@ static bool Fly_Here(AircraftClass * craft, Cell const & cell)
 }
 
 
-static bool Land_Here(FootClass * object, Cell const & cell, MissionType mission = MISSION_GUARD_AREA)
+static bool Land_Here(FootClass * object, Cell const & cell)
 {
 	for (int radius = 0; radius <= 5; radius++) {
 		for (int y = -radius; y <= radius; y++) {
@@ -1184,8 +1285,6 @@ static bool Land_Here(FootClass * object, Cell const & cell, MissionType mission
 
 				if (object->Unlimbo(Coord(spot), DIR_N)) {
 					object->Look();
-					object->Assign_Mission(mission);
-					object->Commence();
 					return(true);
 				}
 			}
@@ -1239,6 +1338,8 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 				inf->Veterancy.Set_Elite(true);
 				Cell landed = cell;
 				if (Land_Here(inf, cell)) {
+					inf->Assign_Mission(MISSION_GUARD_AREA);
+					inf->Commence();
 					landed = inf->PositionCoord.As_Cell();
 					if (ability.Delivery == SuperPanelAbilityClass::DELIVERY_UNDERGROUND) {
 						Dig_Out_Dust(landed);
@@ -1261,6 +1362,7 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 				ScenarioInit--;
 
 				if (craft != NULL && Fly_Here(craft, cell)) {
+					Lend_Craft(craft);
 					placed++;
 				} else {
 					delete craft;
@@ -1274,6 +1376,8 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 			if (utype != UNIT_NONE && House_Owns(UnitTypes[utype])) {
 				UnitClass * unit = new UnitClass(UnitTypes[utype], PlayerPtr);
 				if (unit != NULL && Land_Here(unit, cell)) {
+					unit->Assign_Mission(MISSION_GUARD_AREA);
+					unit->Commence();
 					Cell landed = unit->PositionCoord.As_Cell();
 					if (ability.Delivery == SuperPanelAbilityClass::DELIVERY_UNDERGROUND) {
 						Dig_Out_Dust(landed);
@@ -1299,28 +1403,35 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 /// <summary>
 /// Leaves a patch of an overlay - tiberium, usually - around the cell given.
 /// </summary>
-bool SuperPanelClass::Place_Seed(Cell const & cell, int radius, char const * overlay_name)
+/// <summary>
+/// Plants tiberium over a circle of the map.
+/// The cell's own growth routine does the planting. Writing an overlay onto the cell
+/// directly - which is what this used to do - leaves the cell without a growth stage and
+/// without the variety of crystal that makes it look like tiberium at all, so nothing
+/// appeared to have been sown.
+/// </summary>
+/// <param name="cell">The middle of the patch.</param>
+/// <param name="radius">The radius of the patch, in cells.</param>
+/// <param name="growth">The growth stage to plant, higher being a fuller patch.</param>
+/// <returns>Did any tiberium take root?</returns>
+bool SuperPanelClass::Place_Seed(Cell const & cell, int radius, int growth)
 {
-	OverlayType otype = OverlayTypeClass::From_Name(overlay_name);
-	if (otype == OVERLAY_NONE) {
-		return(false);
-	}
+	int planted = 0;
 
-	int placed = 0;
 	for (int y = -radius; y <= radius; y++) {
 		for (int x = -radius; x <= radius; x++) {
 			if ((x * x + y * y) > radius * radius) continue;
 
 			Cell spot(cell.X + x, cell.Y + y);
 			if (!Map.In_Radar(spot)) continue;
-			if (Map[spot].Overlay != OVERLAY_NONE) continue;
 
-			new OverlayClass(OverlayTypes[otype], spot, HOUSE_NONE);
-			placed++;
+			if (Map[spot].Place_Tiberium(TIBERIUM_RIPARIUS, growth)) {
+				planted++;
+			}
 		}
 	}
 
-	return(placed > 0);
+	return(planted > 0);
 }
 
 
@@ -1359,12 +1470,12 @@ bool SuperPanelClass::Launch_Hunter_Seeker(Cell const & target)
 		return(false);
 	}
 
-	// the drone is sent in over the edge of the map, and failing that from where the
-	// player aimed, so that the power is never spent on an arrival that has no room
+	// the drone comes up where the player aimed, so that the power is seen to do something,
+	// and over the edge of the map only when there is no room there
 	Cell entries[3];
-	entries[0] = Map.Calculated_Cell(PlayerPtr->Control.Edge, CELL_NONE, CELL_NONE, SPEED_WINGED);
-	entries[1] = Map.Calculated_Cell(SOURCE_NORTH, CELL_NONE, CELL_NONE, SPEED_WINGED);
-	entries[2] = target;
+	entries[0] = target;
+	entries[1] = Map.Calculated_Cell(PlayerPtr->Control.Edge, CELL_NONE, CELL_NONE, SPEED_WINGED);
+	entries[2] = Map.Calculated_Cell(SOURCE_NORTH, CELL_NONE, CELL_NONE, SPEED_WINGED);
 
 	UnitClass * drone = new UnitClass(side->HunterSeeker, PlayerPtr);
 	if (drone == NULL) return(false);
@@ -1372,17 +1483,21 @@ bool SuperPanelClass::Launch_Hunter_Seeker(Cell const & target)
 	for (int which = 0; which < 3; which++) {
 		if (entries[which] == CELL_NONE) continue;
 
-		if (Land_Here(drone, entries[which], MISSION_ATTACK)) {
+		if (Land_Here(drone, entries[which])) {
+			// the drone finds a target of its own before it is sent off, which is the
+			// order the game's own launcher uses
 			drone->Locomotion->Acquire_Hunter_Seeker_Target();
+			drone->Assign_Mission(MISSION_ATTACK);
 			drone->Commence();
-			DebugString("SuperPanel: hunter seeker sent in at %d,%d\n",
+			Lend_Craft(drone);
+			DebugString("SuperPanel: hunter seeker set loose at %d,%d\n",
 				entries[which].X, entries[which].Y);
 			return(true);
 		}
 	}
 
 	delete drone;
-	DebugString("SuperPanel: nowhere to send the hunter seeker in from\n");
+	DebugString("SuperPanel: nowhere to set the hunter seeker loose\n");
 
 	return(false);
 }
@@ -1413,6 +1528,27 @@ bool SuperPanelClass::Reveal_Area(Cell const & cell, int radius)
 
 
 /// <summary>
+/// Sets off the bang and the scorched ground of one shell landing.
+/// Explosion damage on its own leaves nothing behind to be seen, which is why a barrage
+/// used to do nothing as far as the player was concerned.
+/// </summary>
+static void Shell_Lands(Cell const & cell)
+{
+	Coord const coord = Map[cell].Cell_Coord();
+
+	AnimType bang = AnimTypeClass::From_Name("S_BANG48");
+	if (bang != ANIM_NONE) {
+		new AnimClass(AnimTypes[bang], coord, Random_Pick(0, 3));
+	}
+
+	AnimType scorch = AnimTypeClass::From_Name("S_CLSN30");
+	if (scorch != ANIM_NONE) {
+		new AnimClass(AnimTypes[scorch], coord, Random_Pick(0, 3));
+	}
+}
+
+
+/// <summary>
 /// Brings a battery of guns down on an area.
 /// Several shells land around the spot the player picked rather than one blast, which is
 /// what a barrage looks and feels like from above.
@@ -1431,6 +1567,7 @@ bool SuperPanelClass::Barrage(Cell const & cell, int shells, int radius, int str
 		}
 
 		Explosion_Damage(Map[spot].Cell_Coord(), strength, NULL, warhead, true);
+		Shell_Lands(spot);
 	}
 
 	return(true);
@@ -1447,7 +1584,7 @@ bool SuperPanelClass::Damage_Area(Cell const & cell, int radius, int strength, c
 	Explosion_Damage(Map[cell].Cell_Coord(), strength, NULL, warhead, true);
 
 	if (tiberium) {
-		Place_Seed(cell, radius, "TIB01");
+		Place_Seed(cell, radius, 5);
 	}
 
 	return(true);
@@ -1470,6 +1607,58 @@ void SuperPanelClass::Draw_On_Field(Surface & surface)
 	strip.X -= TacticalRect.X;
 
 	Draw(surface, strip);
+	Draw_Hint(surface, strip);
+}
+
+
+/// <summary>
+/// Draws the hint for whichever square the mouse is resting on.
+/// The game's own tooltips belong to the battlefield this strip is drawn over, so the hint
+/// is drawn here instead: the name of the power, what it does, and where it stands.
+/// </summary>
+void SuperPanelClass::Draw_Hint(Surface & surface, Rect const & strip)
+{
+	int const index = Square_Under_Mouse(strip);
+
+	if (index < 0) return;
+
+	SuperPanelAbilityClass const & ability = Slots[index];
+
+	char state[64];
+	if (!ability.Is_Available()) {
+		strcpy(state, "Израсходовано");
+	} else if (ability.Is_Ready()) {
+		sprintf(state, "Готово, применений: %d", ability.Charges);
+	} else {
+		int const left = ability.Seconds_Left();
+		sprintf(state, "Зарядка: %d:%02d", left / 60, left % 60);
+	}
+
+	Rect cell = Cell_Rect(index, strip);
+	int const width = 170;
+	int const height = 40;
+
+	// the hint sits beside the strip, kept inside the battlefield
+	int left = cell.X - width - 6;
+	if (left < 2) left = cell.X + cell.Width + 6;
+	if (left + width > surface.Get_Width() - 2) left = surface.Get_Width() - width - 2;
+
+	int top = cell.Y - 10;
+	if (top < 2) top = 2;
+	if (top + height > surface.Get_Height() - 2) top = surface.Get_Height() - height - 2;
+
+	Rect box(left, top, width, height);
+	surface.Fill_Rect(box, PANEL_PLATE);
+	surface.Draw_Rect(box, PANEL_FRAME_AIMING);
+
+	Fancy_Text_Print(ability.Name, surface, box, Point2D(box.X + box.Width / 2, box.Y + 3),
+		Fetch_Scheme_By_Name("Green"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	Fancy_Text_Print(ability.Description, surface, box, Point2D(box.X + box.Width / 2, box.Y + 14),
+		Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	Fancy_Text_Print(state, surface, box, Point2D(box.X + box.Width / 2, box.Y + 25),
+		Fetch_Scheme_By_Name("Yellow"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 }
 
 
@@ -1513,17 +1702,35 @@ void SuperPanelClass::Draw(Surface & surface, Rect const & strip)
 
 		surface.Draw_Rect(cell, aiming ? PANEL_FRAME_AIMING : (ready ? PANEL_FRAME_READY : PANEL_FRAME_WAITING));
 
-		// how long until it is ready, or how many uses are left
-		char info[16];
-		if (ready) {
-			sprintf(info, "%d", ability.Charges);
-		} else {
-			sprintf(info, "%d", ability.Seconds_Left());
+		// a bar down the right edge showing how much of the charge has built up
+		Rect gauge(cell.X + cell.Width - PANEL_GAUGE_WIDTH - 1, cell.Y + 1,
+			PANEL_GAUGE_WIDTH, cell.Height - 2);
+		surface.Fill_Rect(gauge, PANEL_CELL_BACK);
+
+		int const filled = (gauge.Height * ability.Charge_Percent()) / 100;
+		if (filled > 0) {
+			surface.Fill_Rect(Rect(gauge.X, gauge.Y + gauge.Height - filled, gauge.Width, filled),
+				ready ? PANEL_BAR_READY : PANEL_BAR_CHARGING);
 		}
 
-		Fancy_Text_Print(info, surface, cell, Point2D(cell.X + cell.Width - 3, cell.Y + 2),
-			Fetch_Scheme_By_Name(ready ? "Green" : "LightGrey"), TBLACK,
-			TextPrintType(TPF_RIGHT|TPF_8POINT|TPF_FULLSHADOW));
+		// how long until it is ready, or how many uses are left. Both are printed large and
+		// bright, since a square quietly counting down is one the player forgets about.
+		char info[24];
+		if (ready) {
+			sprintf(info, "%dx", ability.Charges);
+		} else {
+			int const left = ability.Seconds_Left();
+			if (left >= 60) {
+				sprintf(info, "%d:%02d", left / 60, left % 60);
+			} else {
+				sprintf(info, "%d", left);
+			}
+		}
+
+		Fancy_Text_Print(info, surface, cell,
+			Point2D(cell.X + (cell.Width - PANEL_GAUGE_WIDTH) / 2, cell.Y + 1),
+			Fetch_Scheme_By_Name(ready ? "Green" : "Yellow"), TBLACK,
+			TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
 		// the name, in the place and the style the sidebar captions its cameos with
 		Fancy_Text_Print(ability.Name, surface, cell,

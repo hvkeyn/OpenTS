@@ -113,7 +113,8 @@ class SuperPanelClass
 		void One_Time(void);
 		void Read_INI(CCINIClass const & ini);
 		void Reset(void);
-		void Logic(void);                   // one pass of the charge timers
+		void Logic(void);                   // one pass of the charge timers and the loans
+		char const * Hint(Point2D const & screen); /// the mouse hint for a square, or NULL
 		bool Click(Point2D const & screen); /// a click on the strip: aim, or say it is not ready
 		bool Target(Point2D const & screen);/// a click on the field while aiming
 		bool Cancel(void);                  /// give up aiming
@@ -122,6 +123,7 @@ class SuperPanelClass
 
 		void Draw(Surface & surface, Rect const & strip);
 		void Draw_On_Field(Surface & surface);
+		void Draw_Hint(Surface & surface, Rect const & strip);
 		void Serialize(SaveStreamClass & stream);
 		void Compute_CRC(CRCEngine & crc) const;
 
@@ -137,6 +139,9 @@ class SuperPanelClass
 		static Rect Strip_Rect(void);
 		Rect Cell_Rect(int index, Rect const & strip) const;
 
+		/// The square the mouse is resting on, or -1 when it is elsewhere.
+		int Square_Under_Mouse(Rect const & strip) const;
+
 	protected:
 		static SideType Panel_Side(void);
 		static int Mission_Tier(char const * map_name);
@@ -146,7 +151,7 @@ class SuperPanelClass
 		bool Fire_Slot(int index, Cell const & cell);
 		void Aim_At(int index);
 		bool Place_Squad(SuperPanelAbilityClass const & ability, Cell const & cell, bool airborne);
-		bool Place_Seed(Cell const & cell, int radius, char const * overlay_name);
+		bool Place_Seed(Cell const & cell, int radius, int growth);
 		bool Reveal_Area(Cell const & cell, int radius);
 		bool Barrage(Cell const & cell, int shells, int radius, int strength, char const * warhead_name);
 		bool Launch_Hunter_Seeker(Cell const & target);
