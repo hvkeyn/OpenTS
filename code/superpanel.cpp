@@ -317,8 +317,13 @@ void SuperPanelClass::AI(KeyNumType & input, Point2D const & xy)
 {
 	if (SlotCount == 0) return;
 
-	for (int index = 0; index < SlotCount; index++) {
-		Slots[index].Charge_Up();
+	// the panel charges once per logical frame, however often this is called
+	static unsigned last_frame = 0xFFFFFFFF;
+	if (last_frame != Frame) {
+		last_frame = Frame;
+		for (int index = 0; index < SlotCount; index++) {
+			Slots[index].Charge_Up();
+		}
 	}
 
 	if ((input & KN_BUTTON) == 0 && input != KN_LMOUSE) {

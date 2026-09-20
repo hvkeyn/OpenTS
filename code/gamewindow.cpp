@@ -18,6 +18,8 @@
 #include "gscreen.h"
 #include "init.h"
 #include "movies.h"
+#include "_rect.h"
+#include "superpanel.h"
 #include "video.h"
 
 
@@ -32,6 +34,7 @@ void Game_Window_On_Paint(bool update_surface)
 	if (update_surface) {
 		if (MouseCursor != NULL && VisibleSurface != NULL && HiddenSurface != NULL && CompositeSurface != NULL) {
 			if (ScenarioActive == true) {
+				SuperPanel.Draw(*HiddenSurface, TacticalRect);
 				Map.Blit_Sidebar(true);
 				Update_Visible_Surface(CompositeSurface);
 			} else if (Movie_Is_Playing() == true) {

@@ -897,9 +897,9 @@ static void Super_Panel_Frame(KeyNumType & input, Point2D const & xy)
 
 void DisplayClass::AI(KeyNumType & input, Point2D const & xy)
 {
-	// the super power strip is part of the battlefield: it charges and takes clicks here
+	// the super power strip charges here and takes its clicks here; it is drawn when the
+	// frame is put together, after the battlefield render has had its say
 	SuperPanel.AI(input, xy);
-	SuperPanel.Draw(*HiddenSurface, TacticalRect);
 	BASECLASS::AI(input, xy);
 }
 
