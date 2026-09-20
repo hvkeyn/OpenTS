@@ -338,8 +338,11 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			Present_Page();
 
 			if (strlen(BriefingText) != 0) {
-				Rect rect(CenterX + 110, CenterY + 60, 420, 280);
-				MSPrintAnim::Word_Wrap(BriefingText, Font, 420);
+				// the block of text is as wide as the page allows: the Russian briefings run
+				// longer than the ones the screen was measured for, so every line that fits
+				// is a line the player does not have to page past
+				Rect rect(CenterX + 70, CenterY + 55, 500, 285);
+				MSPrintAnim::Word_Wrap(BriefingText, Font, rect.Width);
 				Font->Get_String_Rect(BriefingText, StringRect);
 				StringRect.X = rect.X + (rect.Width - StringRect.Width) / 2;
 				StringRect.Y = rect.Y + (rect.Height - Font->Get_Font_Height() * (StringRect.Height / Font->Get_Font_Height())) / 2;
@@ -687,6 +690,12 @@ void RestateMission::More_Button(int x, int y)
 		btn->X = x - (btn->Width / 2);
 		btn->Y = y;
 		btn->Enable();
+
+		// the key or click that brought the page up is still in the queue. Left there it
+		// would dismiss this button at once and turn the page again, so the second press
+		// would appear to do nothing and the briefing would run away from the reader.
+		Keyboard->Clear();
+
 		User_Input();
 		btn->Draw();
 		btn->Disable();

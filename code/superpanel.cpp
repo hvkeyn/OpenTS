@@ -1651,13 +1651,18 @@ void SuperPanelClass::Draw_Hint(Surface & surface, Rect const & strip)
 	surface.Fill_Rect(box, PANEL_PLATE);
 	surface.Draw_Rect(box, PANEL_FRAME_AIMING);
 
-	Fancy_Text_Print(ability.Name, surface, box, Point2D(box.X + box.Width / 2, box.Y + 3),
+	// the print point is measured from the clip rectangle, so the whole surface is handed
+	// over as the clip and the box is named in surface coordinates. Clipping to the box
+	// itself would push the text out of sight.
+	Rect const whole = surface.Get_Rect();
+
+	Fancy_Text_Print(ability.Name, surface, whole, Point2D(box.X + box.Width / 2, box.Y + 3),
 		Fetch_Scheme_By_Name("Green"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
-	Fancy_Text_Print(ability.Description, surface, box, Point2D(box.X + box.Width / 2, box.Y + 14),
+	Fancy_Text_Print(ability.Description, surface, whole, Point2D(box.X + box.Width / 2, box.Y + 14),
 		Fetch_Scheme_By_Name("LightGrey"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
-	Fancy_Text_Print(state, surface, box, Point2D(box.X + box.Width / 2, box.Y + 25),
+	Fancy_Text_Print(state, surface, whole, Point2D(box.X + box.Width / 2, box.Y + 25),
 		Fetch_Scheme_By_Name("Yellow"), TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 }
 
@@ -1727,13 +1732,15 @@ void SuperPanelClass::Draw(Surface & surface, Rect const & strip)
 			}
 		}
 
-		Fancy_Text_Print(info, surface, cell,
+		// the print point is measured from the clip rectangle, so the text is clipped against
+		// the whole surface and placed in surface coordinates
+		Fancy_Text_Print(info, surface, surface.Get_Rect(),
 			Point2D(cell.X + (cell.Width - PANEL_GAUGE_WIDTH) / 2, cell.Y + 1),
 			Fetch_Scheme_By_Name(ready ? "Green" : "Yellow"), TBLACK,
 			TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
 		// the name, in the place and the style the sidebar captions its cameos with
-		Fancy_Text_Print(ability.Name, surface, cell,
+		Fancy_Text_Print(ability.Name, surface, surface.Get_Rect(),
 			Point2D(cell.X + cell.Width / 2, cell.Y + SidebarClass::StripClass::CAMEO_TEXT_Y_OFFSET),
 			Fetch_Scheme_By_Name(ready ? "Green" : "Grey"), TBLACK,
 			TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
