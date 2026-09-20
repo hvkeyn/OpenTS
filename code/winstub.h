@@ -25,5 +25,6 @@ bool Win_Window_Drawable_Size(HWND window, int & width, int & height);
 int Win_Window_Refresh_Rate(HWND window);
 
 void Load_Title_Screen(char const * name, Surface * surface, PaletteClass * palette);
+void Stretch_Title_Screen(char const * name, Surface * surface, PaletteClass * palette);
 
 unsigned int Build_Number(void);

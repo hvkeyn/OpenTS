@@ -415,8 +415,15 @@ void SuperPanelAbilityClass::Charge_Up(void)
 SuperPanelClass::SuperPanelClass(void) :
 	SlotCount(0),
 	TestAll(false),
-	Pending(-1)
+	Pending(-1),
+	PoolCount(0),
+	SlotLimit(MAX_SLOTS),
+	Named(false),
+	NamedCount(0),
+	PresentMask(0),
+	RefreshTimer(0)
 {
+	Stem[0] = '\0';
 }
 
 
@@ -486,28 +493,30 @@ int SuperPanelClass::Mission_Tier(char const * map_name)
 
 
 /// <summary>
-/// Reads the whole pool of abilities out of SUPERPOWERS.INI and works out which of them
-/// this mission hands to the player.
+/// Reads the whole pool of abilities out of SUPERPOWERS.INI and picks the set this mission
+/// hands to the player.
 ///
 /// The pool is every section [Panel] lists. A mission takes the set its own
 /// [Mission.&lt;map&gt;] section names when the file has one, and otherwise the abilities that
-/// suit the side the player fights for and are unlocked at the stage the mission has
-/// reached. A house that belongs to a side of its own - the campaigns that other games
-/// bring along - falls back on the head of the pool, so that its panel is never empty.
+/// suit the side the player fights for and are unlocked at the stage the mission has reached.
+/// A house that belongs to a side of its own - the campaigns that other games bring along -
+/// falls back on the head of the pool, so that its panel is never empty.
 ///
 /// Whatever the panel ends up with, the mission's own [SuperPowers] section may still
 /// replace or add to it.
 /// </summary>
 void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 {
-	SuperPanelAbilityClass pool[POOL_LIMIT];
 	char section[64];
-	char map[64];
-	int pool_count = 0;
 	CCINIClass ini;
 
 	SlotCount = 0;
 	Pending = -1;
+	PoolCount = 0;
+	Named = false;
+	NamedCount = 0;
+	PresentMask = 0;
+	RefreshTimer = 0;
 
 	CCFileClass file(SUPERPOWERS_INI);
 	if (!file.Is_Available()) {
@@ -518,13 +527,13 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 
 	TestAll = ini.Get_Bool(PANEL_SECTION, "TestAll", false);
 
-	int slots = ini.Get_Int(PANEL_SECTION, "Slots", MAX_SLOTS);
-	if (slots < 0) slots = 0;
-	if (slots > MAX_SLOTS) slots = MAX_SLOTS;
+	SlotLimit = ini.Get_Int(PANEL_SECTION, "Slots", MAX_SLOTS);
+	if (SlotLimit < 0) SlotLimit = 0;
+	if (SlotLimit > MAX_SLOTS) SlotLimit = MAX_SLOTS;
 
 	// every entry of [Panel] names a section holding one ability of the pool
 	int entries = ini.Entry_Count(PANEL_SECTION);
-	for (int index = 0; index < entries && pool_count < POOL_LIMIT; index++) {
+	for (int index = 0; index < entries && PoolCount < POOL_LIMIT; index++) {
 		char const * entry = ini.Get_Entry(PANEL_SECTION, index);
 		if (entry == NULL) continue;
 		if (stricmp(entry, "Slots") == 0 || stricmp(entry, "TestAll") == 0) continue;
@@ -532,31 +541,30 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 		ini.Get_String(PANEL_SECTION, entry, "", section, sizeof(section));
 		if (section[0] == '\0') continue;
 
-		if (pool[pool_count].Read_INI(ini, section)) {
-			pool_count++;
+		if (Pool[PoolCount].Read_INI(ini, section)) {
+			PoolCount++;
 		}
 	}
 
-	Map_Stem(map, sizeof(map));
+	Map_Stem(Stem, sizeof(Stem));
 
 	if (TestAll) {
 
 		// the test set: the head of the pool, whatever side the abilities belong to
-		for (int index = 0; index < pool_count && SlotCount < slots; index++) {
-			Slots[SlotCount++] = pool[index];
+		for (int index = 0; index < PoolCount && SlotCount < SlotLimit; index++) {
+			Slots[SlotCount++] = Pool[index];
 		}
 
 	} else {
 
 		char key[96];
-		snprintf(key, sizeof(key), "Mission.%s", map);
-		bool named = false;
+		snprintf(key, sizeof(key), "Mission.%s", Stem);
 
-		if (map[0] != '\0' && ini.Entry_Count(key) > 0) {
+		if (Stem[0] != '\0' && ini.Entry_Count(key) > 0) {
 
 			// the mission names its own set, in the order the player will see it in
 			int wanted = ini.Entry_Count(key);
-			for (int index = 0; index < wanted && SlotCount < slots; index++) {
+			for (int index = 0; index < wanted && NamedCount < MAX_SLOTS; index++) {
 				char const * entry = ini.Get_Entry(key, index);
 				if (entry == NULL) continue;
 
@@ -564,64 +572,31 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 				if (section[0] == '\0') continue;
 
 				int found = -1;
-				for (int slot = 0; slot < pool_count; slot++) {
-					if (stricmp(pool[slot].Section, section) == 0) {
+				for (int slot = 0; slot < PoolCount; slot++) {
+					if (stricmp(Pool[slot].Section, section) == 0) {
 						found = slot;
 						break;
 					}
 				}
 
 				if (found >= 0) {
-					Slots[SlotCount++] = pool[found];
-					named = true;
+					NamedSlots[NamedCount++] = Pool[found];
+					Named = true;
 				} else {
 					// a section of the mission's own, written for it alone
 					SuperPanelAbilityClass ability;
 					if (ability.Read_INI(ini, section)) {
-						Slots[SlotCount++] = ability;
-						named = true;
+						NamedSlots[NamedCount++] = ability;
+						Named = true;
 					}
 				}
 			}
 		}
 
-		if (!named) {
-			SideType const side = Panel_Side();
-			int const tier = Mission_Tier(map);
-			SuperPanelAbilityClass candidate[POOL_LIMIT];
-			int count = 0;
-
-			// a mission that starts with nothing standing has no use for the powers that look
-			// after a base
-			bool const has_base = (PlayerPtr != NULL && PlayerPtr->CurBuildings > 0);
-
-			for (int index = 0; index < pool_count; index++) {
-				if (pool[index].Side != SIDE_NONE && pool[index].Side != side) continue;
-				if (pool[index].Tier > tier) continue;
-				if (!has_base && pool[index].Type == SuperPanelAbilityClass::ABILITY_ARMOR_BOOST) continue;
-
-				int at = count++;
-				while (at > 0 && candidate[at - 1].Tier < pool[index].Tier) {
-					candidate[at] = candidate[at - 1];
-					at--;
-				}
-				candidate[at] = pool[index];
-			}
-
-			// nothing suits this side: the head of the pool still gives the player something
-			if (count == 0) {
-				for (int index = 0; index < pool_count; index++) {
-					candidate[count++] = pool[index];
-				}
-			}
-
-			// the heaviest weapons win the places, then the set is laid out lightest first
-			int const take = (count < slots) ? count : slots;
-			for (int index = take - 1; index >= 0; index--) {
-				Slots[SlotCount++] = candidate[index];
-			}
-		}
+		Choose();
 	}
+
+	PresentMask = Present_Mask();
 
 	{
 		char list[512];
@@ -633,7 +608,7 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 		}
 
 		DebugString("SuperPanel: %d abilities for side %d at %s: %s\n",
-			SlotCount, (int)Panel_Side(), map, list);
+			SlotCount, (int)Panel_Side(), Stem, list);
 	}
 
 	// a mission may tune what it was given or add its own abilities
@@ -669,6 +644,156 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 
 
 /// <summary>
+/// Is this one of the powers the other side would normally hold, which the player can now
+/// call on because the building that grants it has been taken over? The game knows, because
+/// it hands such a weapon to whoever owns the building that grants it.
+/// </summary>
+bool SuperPanelClass::Captured(SuperPanelAbilityClass const & ability) const
+{
+	return(ability.Weapon != SUPER_NONE
+		&& PlayerPtr != NULL
+		&& ability.Weapon < PlayerPtr->SuperWeapon.Count()
+		&& PlayerPtr->SuperWeapon[ability.Weapon]->Is_Present());
+}
+
+
+/// <summary>
+/// Works out which of the pooled abilities the player is offered. Called when the mission is
+/// read and again whenever the powers the player holds change.
+/// </summary>
+void SuperPanelClass::Choose(void)
+{
+	SlotCount = 0;
+
+	if (Named) {
+		for (int index = 0; index < NamedCount && SlotCount < SlotLimit; index++) {
+			Slots[SlotCount++] = NamedSlots[index];
+		}
+		return;
+	}
+
+	if (TestAll) {
+		for (int index = 0; index < PoolCount && SlotCount < SlotLimit; index++) {
+			Slots[SlotCount++] = Pool[index];
+		}
+		return;
+	}
+
+	SideType const side = Panel_Side();
+	int const tier = Mission_Tier(Stem);
+
+	// a mission that starts with nothing standing has no use for the powers that look after
+	// a base
+	bool const has_base = (PlayerPtr != NULL && PlayerPtr->CurBuildings > 0);
+
+	SuperPanelAbilityClass candidate[POOL_LIMIT];
+	int count = 0;
+
+	for (int index = 0; index < PoolCount; index++) {
+		bool const suits_side = (Pool[index].Side == SIDE_NONE || Pool[index].Side == side);
+
+		// a power of the other side is offered once its building has been taken over
+		if (!suits_side && !Captured(Pool[index])) continue;
+		if (Pool[index].Tier > tier) continue;
+		if (!has_base && Pool[index].Type == SuperPanelAbilityClass::ABILITY_ARMOR_BOOST) continue;
+
+		int at = count++;
+		while (at > 0 && candidate[at - 1].Tier < Pool[index].Tier) {
+			candidate[at] = candidate[at - 1];
+			at--;
+		}
+		candidate[at] = Pool[index];
+	}
+
+	// nothing suits this side: the head of the pool still gives the player something
+	if (count == 0) {
+		for (int index = 0; index < PoolCount; index++) {
+			candidate[count++] = Pool[index];
+		}
+	}
+
+	// the heaviest weapons win the places, then the set is laid out lightest first
+	int const take = (count < SlotLimit) ? count : SlotLimit;
+	for (int index = take - 1; index >= 0; index--) {
+		Slots[SlotCount++] = candidate[index];
+	}
+}
+
+
+/// <summary>
+/// Which of the game's super weapons the player holds at the moment.
+/// A weapon becomes held when the building that grants it is owned, so this is also a record
+/// of which of the enemy's powers the player has taken over.
+/// </summary>
+int SuperPanelClass::Present_Mask(void)
+{
+	int mask = 0;
+
+	if (PlayerPtr != NULL) {
+		for (int index = 0; index < PlayerPtr->SuperWeapon.Count() && index < 31; index++) {
+			if (PlayerPtr->SuperWeapon[index]->Is_Present()) {
+				mask |= (1 << index);
+			}
+		}
+	}
+
+	return(mask);
+}
+
+
+/// <summary>
+/// Goes over the set again while the mission runs.
+/// Taking over a building that grants a super weapon - the enemy's temple, an uplink - gives
+/// the player powers of theirs, and a set that was chosen when the mission was read would
+/// never notice. The squares the player already has keep their charges.
+/// </summary>
+void SuperPanelClass::Refresh(void)
+{
+	if (TestAll || Named || PoolCount == 0) return;
+
+	if (++RefreshTimer < TICKS_PER_SECOND * 5) return;
+	RefreshTimer = 0;
+
+	int const mask = Present_Mask();
+	if (mask == PresentMask) return;
+
+	PresentMask = mask;
+
+	SuperPanelAbilityClass before[MAX_SLOTS];
+	int const before_count = SlotCount;
+
+	for (int index = 0; index < before_count; index++) {
+		before[index] = Slots[index];
+	}
+
+	Choose();
+
+	for (int index = 0; index < SlotCount; index++) {
+		for (int old = 0; old < before_count; old++) {
+			if (stricmp(Slots[index].Section, before[old].Section) == 0) {
+				Slots[index].Cooldown = before[old].Cooldown;
+				Slots[index].Charges = before[old].Charges;
+				break;
+			}
+		}
+	}
+
+	{
+		char list[512];
+		list[0] = '\0';
+
+		for (int index = 0; index < SlotCount; index++) {
+			snprintf(list + strlen(list), sizeof(list) - strlen(list),
+				"%s%s", index ? ", " : "", Slots[index].Name);
+		}
+
+		DebugString("SuperPanel: %d abilities after the player's own super weapons changed: %s\n",
+			SlotCount, list);
+	}
+}
+
+
+/// <summary>
 /// Starts every ability off at the beginning of a mission.
 /// </summary>
 void SuperPanelClass::Reset(void)
@@ -694,6 +819,10 @@ void SuperPanelClass::Reset(void)
 /// </summary>
 void SuperPanelClass::Logic(void)
 {
+	// the set is looked at again now and then, for the powers the player may have taken
+	// over from the other side
+	Refresh();
+
 	for (int index = 0; index < SlotCount; index++) {
 		Slots[index].Charge_Up();
 	}

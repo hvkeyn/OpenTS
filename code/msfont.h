@@ -23,8 +23,15 @@ class MSFont
 		MSFont(char const * file_name, char const * palette_name);
 		virtual ~MSFont(void);
 
-		int Get_Font_Width(void) {return(FontWidth);}
-		int Get_Font_Height(void) {return(FontHeight);}
+		///
+		/// Enlarges the font by a whole number of times. A display larger than the one the
+		/// screens were written for asks for bigger text, and text drawn a whole pixel at a
+		/// time stays sharp where a stretched picture of it would not.
+		///
+		void Set_Scale(int numerator, int denominator = 1);
+
+		int Get_Font_Width(void) const;
+		int Get_Font_Height(void) const;
 
 		unsigned char Get_Red(void) {return(Red);}
 		unsigned char Get_Green(void) {return(Green);}
@@ -48,6 +55,12 @@ class MSFont
 	private:
 		int Glyph_Frame(char32_t code) const;
 
+		///
+		/// Draws one glyph enlarged, a pixel of the glyph at a time. Only used when the font
+		/// has been scaled up.
+		///
+		void Draw_Glyph_Enlarged(Surface * surface, int shape_frame, int x, int y);
+
 		/*
 		 * These are the width and height of the font's glyph cell, expressed in pixels and
 		 * taken from the shape file as it is loaded. The height is what a newline advances
@@ -55,6 +68,14 @@ class MSFont
 		 */
 		int FontWidth;
 		int FontHeight;
+
+		/*
+		 * How much the glyphs and the metrics are enlarged by. The numerator is the size the
+		 * font is drawn at and the denominator the size it was made at, so a font of eight
+		 * pixels drawn at twice the size has a numerator of two.
+		 */
+		int ScaleNum;
+		int ScaleDen;
 
 		/*
 		 * These are the red, green and blue components of the color the font prints in, read

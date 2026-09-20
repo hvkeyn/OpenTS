@@ -126,6 +126,7 @@ class SuperPanelClass
 		void Compute_CRC(CRCEngine & crc) const;
 
 		int Count(void) const;
+		void Refresh(void);
 		SuperPanelAbilityClass & operator[](int index) { return(Slots[index]); }
 		SuperPanelAbilityClass const & operator[](int index) const { return(Slots[index]); }
 
@@ -139,6 +140,9 @@ class SuperPanelClass
 	protected:
 		static SideType Panel_Side(void);
 		static int Mission_Tier(char const * map_name);
+		static int Present_Mask(void);
+		bool Captured(SuperPanelAbilityClass const & ability) const;
+		void Choose(void);
 		bool Fire_Slot(int index, Cell const & cell);
 		void Aim_At(int index);
 		bool Place_Squad(SuperPanelAbilityClass const & ability, Cell const & cell, bool airborne);
@@ -154,6 +158,22 @@ class SuperPanelClass
 		int SlotCount;
 		bool TestAll;
 		int Pending;                        /// the square that is waiting for a target, or -1
+
+	protected:
+		/*
+		 * The whole set the file offers, and the mission the set was chosen for. The choice is
+		 * made again while the mission runs, because a player who takes over the enemy's own
+		 * super weapon building comes to hold powers of theirs.
+		 */
+		SuperPanelAbilityClass Pool[32];
+		int PoolCount;
+		int SlotLimit;
+		char Stem[64];
+		bool Named;
+		SuperPanelAbilityClass NamedSlots[MAX_SLOTS];
+		int NamedCount;
+		int PresentMask;
+		int RefreshTimer;
 };
 
 extern SuperPanelClass SuperPanel;
