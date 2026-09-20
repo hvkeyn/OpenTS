@@ -530,47 +530,6 @@ void Create_Main_Window ( HINSTANCE instance , int command_show , int width , in
 /// <param name="name">The name of the picture file to load.</param>
 /// <param name="surface">The surface to draw the title screen upon.</param>
 /// <param name="palette">The palette to load the picture's colors into.</param>
-/// <summary>
-/// Loads a title screen picture and stretches it to fill the surface.
-/// Use this instead of Load_Title_Screen where the artwork is meant to be the whole
-/// screen at whatever resolution the game is running at, rather than a picture of its own
-/// size sitting in the middle of it.
-/// </summary>
-/// <param name="name">The name of the picture file to load.</param>
-/// <param name="surface">The surface to fill with the picture.</param>
-/// <param name="palette">The palette to load the picture's colors into.</param>
-void Stretch_Title_Screen(char const * name, Surface * surface, PaletteClass * palette)
-{
-	if (surface == NULL) return;
-
-	CCFileClass file(name);
-	Surface * load_buffer = Read_PCX_File(file, palette);
-
-	if (load_buffer == NULL) return;
-
-	/*
-	**	The picture is turned into the display's own format at its own size first, so that
-	**	the one stretched blit at the end is all the scaling that has to happen.
-	*/
-	DSurface * page = new DSurface(load_buffer->Get_Width(), load_buffer->Get_Height());
-
-	if (page != NULL) {
-		if (palette != NULL && load_buffer->Bytes_Per_Pixel() == 1) {
-			ConvertClass * drawer = new ConvertClass(*palette, *palette, *page);
-			Blit_Block(*page, *drawer, *load_buffer, load_buffer->Get_Rect(), Point2D(0, 0), page->Get_Rect());
-			delete drawer;
-		} else {
-			page->Blit_From(*load_buffer);
-		}
-
-		surface->Blit_From(surface->Get_Rect(), *page, page->Get_Rect());
-		delete page;
-	}
-
-	delete load_buffer;
-}
-
-
 void Load_Title_Screen(char const * name, Surface * surface, PaletteClass * palette)
 {
 	Surface *load_buffer;

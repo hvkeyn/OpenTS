@@ -70,9 +70,7 @@ int MSFont::Glyph_Frame(char32_t code) const
 MSFont::MSFont(bool use_side_palette) :
 	Red(0),
 	Green(0),
-	Blue(0),
-	ScaleNum(1),
-	ScaleDen(1)
+	Blue(0)
 {
 	Init("FULLFNT3.SHP", use_side_palette ? "SIDEFNT3.PAL" : "FULLFNT3.PAL");
 	InstanceCount++;
@@ -88,9 +86,7 @@ MSFont::MSFont(bool use_side_palette) :
 MSFont::MSFont(char const * file_name) :
 	Red(0),
 	Green(0),
-	Blue(0),
-	ScaleNum(1),
-	ScaleDen(1)
+	Blue(0)
 {
 	char palette_name[256];
 	strncpy(palette_name, file_name, 256);
@@ -110,9 +106,7 @@ MSFont::MSFont(char const * file_name) :
 MSFont::MSFont(char const * file_name, char const * palette_name) :
 	Red(0),
 	Green(0),
-	Blue(0),
-	ScaleNum(1),
-	ScaleDen(1)
+	Blue(0)
 {
 	Init(file_name, palette_name);
 	InstanceCount++;
@@ -255,34 +249,6 @@ bool MSFont::Init(char const * file_name, char const * palette_name)
 
 
 /// <summary>
-/// Enlarges the font, and with it every measurement the layout is built from.
-/// </summary>
-void MSFont::Set_Scale(int numerator, int denominator)
-{
-	ScaleNum = (numerator > 0) ? numerator : 1;
-	ScaleDen = (denominator > 0) ? denominator : 1;
-}
-
-
-/// <summary>
-/// The height of the font as it is being drawn.
-/// </summary>
-int MSFont::Get_Font_Height(void) const
-{
-	return((FontHeight * ScaleNum) / ScaleDen);
-}
-
-
-/// <summary>
-/// The width of the font's cell as it is being drawn.
-/// </summary>
-int MSFont::Get_Font_Width(void) const
-{
-	return((FontWidth * ScaleNum) / ScaleDen);
-}
-
-
-/// <summary>
 /// Fetches the area a string will take up when printed.
 /// Use this routine to center or otherwise place a block of text before drawing it.
 /// Newlines are honored, so the rectangle spans every line of the string.
@@ -295,7 +261,7 @@ void MSFont::Get_String_Rect(char const * string, Rect & rect)
 
 	if (string != NULL && strlen(string) != 0) {
 
-		int height = Get_Font_Height();
+		int height = FontHeight;
 
 		do {
 			int width = 0;
@@ -309,12 +275,12 @@ void MSFont::Get_String_Rect(char const * string, Rect & rect)
 
 			if (*string == '\n') {
 				string++;
-				height += Get_Font_Height();
+				height += FontHeight;
 			}
 
 		} while (*string);
 
-		rect.Set(0, 0, max_width + Get_Font_Width(), height);
+		rect.Set(0, 0, max_width + FontWidth, height);
 		return;
 	}
 
@@ -360,22 +326,17 @@ int MSFont::Get_String_Width(char const * string)
 /// </summary>
 /// <returns>Returns with the width in pixels. Characters below the space are worth
 /// nothing.</returns>
-/// <summary>
-/// The width of one character as the font is being drawn, which is what the layout of a
-/// page is measured in.
-/// </summary>
 int MSFont::Get_Character_Width(char32_t code)
 {
-	int width = 0;
-
 	if (code == ' ') {
-		width = 8;
-	} else if (code > ' ') {
-		int shape_frame = Glyph_Frame(code);
-		width = FontFile->Get_Rect(shape_frame + 2).Width + 1;
+		return(8);
 	}
 
-	return((width * ScaleNum) / ScaleDen);
+	if (code > ' ') {
+		int shape_frame = Glyph_Frame(code);
+		return(FontFile->Get_Rect(shape_frame + 2).Width + 1);
+	}
+	return(0);
 }
 
 
@@ -405,65 +366,7 @@ void MSFont::Draw_Character(Surface * surface, char32_t code, int x, int y, int 
 			}
 		}
 
-		if (ScaleNum != ScaleDen && ScaleNum > ScaleDen) {
-			Draw_Glyph_Enlarged(surface, shape_frame + frame, x, y);
-		} else {
-			Draw_Shape(*surface, *Drawer, FontFile, shape_frame + frame, Point2D(x - FontFile->Get_Rect(shape_frame + 2).X, y), surface->Get_Rect(), SHAPE_WIN_REL);
-		}
-	}
-}
-
-
-/// <summary>
-/// Draws one glyph enlarged by whole pixels.
-/// The glyph is a small shape, so it is walked a pixel at a time and each pixel becomes a
-/// block of its own. Text drawn this way stays sharp however large the display is, which a
-/// stretched picture of the same text cannot be.
-/// </summary>
-/// <param name="shape_frame">The frame of the font that holds the glyph.</param>
-/// <param name="x">The left edge of the glyph's cell.</param>
-/// <param name="y">The top edge of the glyph's cell.</param>
-void MSFont::Draw_Glyph_Enlarged(Surface * surface, int shape_frame, int x, int y)
-{
-	if (surface == NULL || FontFile == NULL || Drawer == NULL) return;
-
-	Rect rect = FontFile->Get_Rect(shape_frame);
-	unsigned char const * data = (unsigned char const *)FontFile->Get_Data(shape_frame);
-
-	if (data == NULL || !rect.Is_Valid()) return;
-
-	// the ink of a glyph sits at an offset inside its cell, and that offset is measured
-	// on the frame the font aligns its glyphs by
-	int const offset_x = FontFile->Get_Rect(shape_frame + 2).X;
-
-	for (int py = 0; py < rect.Height; py++) {
-		int px = 0;
-
-		while (px < rect.Width) {
-			unsigned char index = data[py * rect.Width + px];
-
-			// nothing is drawn where the glyph is transparent
-			if (index == 0) {
-				px++;
-				continue;
-			}
-
-			int run = 0;
-			while (px + run < rect.Width && data[py * rect.Width + px + run] == index) {
-				run++;
-			}
-
-			int const left = x - (offset_x * ScaleNum) / ScaleDen + (px * ScaleNum) / ScaleDen;
-			int const right = x - (offset_x * ScaleNum) / ScaleDen + ((px + run) * ScaleNum) / ScaleDen;
-			int const top = y + (py * ScaleNum) / ScaleDen;
-			int const bottom = y + ((py + 1) * ScaleNum) / ScaleDen;
-
-			if (right > left && bottom > top) {
-				surface->Fill_Rect(Rect(left, top, right - left, bottom - top), Drawer->Convert_Pixel(index));
-			}
-
-			px += run;
-		}
+		Draw_Shape(*surface, *Drawer, FontFile, shape_frame + frame, Point2D(x - FontFile->Get_Rect(shape_frame + 2).X, y), surface->Get_Rect(), SHAPE_WIN_REL);
 	}
 }
 
@@ -483,16 +386,12 @@ void MSFont::Draw_String(Surface * surface, char const * string, int x, int y, i
 		char32_t code = UTF8::Decode(string);
 		if (code == '\n') {
 			current_x = x;
-			y += Get_Font_Height();
+			y += FontHeight;
 		} else {
 			if (code > ' ') {
 				int shape_frame = Glyph_Frame(code);
 
-				if (ScaleNum != ScaleDen && ScaleNum > ScaleDen) {
-					Draw_Glyph_Enlarged(surface, shape_frame + frame, current_x, y);
-				} else {
-					Draw_Shape(*surface, *Drawer, FontFile, shape_frame + frame, Point2D(current_x - FontFile->Get_Rect(shape_frame + 2).X, y), surface->Get_Rect(), SHAPE_WIN_REL);
-				}
+				Draw_Shape(*surface, *Drawer, FontFile, shape_frame + frame, Point2D(current_x - FontFile->Get_Rect(shape_frame + 2).X, y), surface->Get_Rect(), SHAPE_WIN_REL);
 			}
 
 			current_x += Get_Character_Width(code);

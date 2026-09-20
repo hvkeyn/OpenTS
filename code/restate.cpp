@@ -48,26 +48,24 @@
 
 /*
 ** The briefing was laid out for a 640 by 400 display, which is the screen the mission
-** restatement was written for. The layout is enlarged by a whole number of times to suit
-** the display the game is running at, and the text is enlarged with it a pixel at a time,
-** so the briefing fills the screen and stays sharp while it does.
+** restatement was written for. It is drawn onto a page of that size and that page is
+** stretched onto the frame when the briefing is shown, so the briefing fills whatever
+** resolution the game is running at instead of sitting in the middle of a wide screen.
 */
-static int const BRIEFING_BASE_WIDTH = 640;
-static int const BRIEFING_BASE_HEIGHT = 400;
+static int const BRIEFING_WIDTH = 640;
+static int const BRIEFING_HEIGHT = 400;
 
-/// How much the briefing layout is enlarged by. One means it is shown as it was written.
-static int BriefingScale = 1;
-
-/// The backdrop artwork, stretched to fill the frame, which restores what a button covered.
+/// The page the briefing is drawn on, and the untouched artwork behind it.
+static Surface * BriefingPage = NULL;
 static Surface * BriefingBackdrop = NULL;
 
 /// <summary>
-/// The surface the briefing draws on. The layout is enlarged rather than the picture of
-/// it, so this is the frame itself.
+/// The surface the briefing draws on: its own page while one is set up, and the frame
+/// otherwise.
 /// </summary>
 static Surface * Page_Surface(void)
 {
-	return(HiddenSurface);
+	return(BriefingPage != NULL ? BriefingPage : HiddenSurface);
 }
 
 
@@ -334,19 +332,14 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			MouseCursor->Release_Mouse();
 			Hide_Mouse();
 
-			// the artwork fills the whole frame, which is where the layout is enlarged to as
-			// well, so the two belong to the same picture
-			Stretch_Title_Screen("SCORE.PCX", BriefingBackdrop, &CCPalette);
-			HiddenSurface->Blit_From(*BriefingBackdrop);
-			Add_Update_Rect(HiddenSurface->Get_Rect());
-			Blit_All(HiddenSurface);
+			Load_Title_Screen("SCORE.PCX", BriefingBackdrop, &CCPalette);
+			BriefingPage->Blit_From(*BriefingBackdrop);
+			Add_Update_Rect(BriefingPage->Get_Rect());
+			Present_Page();
 
 			if (strlen(BriefingText) != 0) {
-				// the same block of text the briefing was written around, enlarged to suit
-				// the display
-				Rect rect(CenterX + 110 * BriefingScale, CenterY + 60 * BriefingScale,
-					420 * BriefingScale, 280 * BriefingScale);
-				MSPrintAnim::Word_Wrap(BriefingText, Font, rect.Width);
+				Rect rect(CenterX + 110, CenterY + 60, 420, 280);
+				MSPrintAnim::Word_Wrap(BriefingText, Font, 420);
 				Font->Get_String_Rect(BriefingText, StringRect);
 				StringRect.X = rect.X + (rect.Width - StringRect.Width) / 2;
 				StringRect.Y = rect.Y + (rect.Height - Font->Get_Font_Height() * (StringRect.Height / Font->Get_Font_Height())) / 2;
@@ -370,7 +363,7 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 						More_Button(StringRect.X + StringRect.Width / 2, StringRect.Y + StringRect.Height);
 						Hide_Mouse();
 
-						HiddenSurface->Blit_From(rect, *BriefingBackdrop, rect);
+						BriefingPage->Blit_From(rect, *BriefingBackdrop, rect);
 						Add_Update_Rect(rect);
 					}
 				}
@@ -391,9 +384,9 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			result = User_Input();
 			Hide_Mouse();
 
-			HiddenSurface->Fill(0);
-			Add_Update_Rect(HiddenSurface->Get_Rect());
-			Blit_All(HiddenSurface);
+			BriefingPage->Fill(0);
+			Add_Update_Rect(BriefingPage->Get_Rect());
+			Present_Page();
 
 			Cleanup();
 			Keyboard->Clear();
@@ -429,24 +422,17 @@ bool RestateMission::Init(ScenarioClass * scen)
 
 	Scenario = scen;
 
-	// the layout is enlarged as far as the display allows without cropping it, and the
-	// whole of it is centered in the frame
-	int const frame_width = HiddenSurface->Get_Width();
-	int const frame_height = HiddenSurface->Get_Height();
-
-	BriefingScale = std::min(frame_width / BRIEFING_BASE_WIDTH, frame_height / BRIEFING_BASE_HEIGHT);
-	if (BriefingScale < 1) BriefingScale = 1;
-
-	CenterX = (frame_width - BRIEFING_BASE_WIDTH * BriefingScale) / 2;
-	CenterY = (frame_height - BRIEFING_BASE_HEIGHT * BriefingScale) / 2;
-
-	if (BriefingBackdrop == NULL || BriefingBackdrop->Get_Width() != frame_width || BriefingBackdrop->Get_Height() != frame_height) {
-		delete BriefingBackdrop;
-		BriefingBackdrop = new DSurface(frame_width, frame_height);
+	// the briefing is measured against its own page and stretched when it is shown, so
+	// its layout starts at the page's corner
+	if (BriefingPage == NULL) {
+		BriefingPage = new DSurface(BRIEFING_WIDTH, BRIEFING_HEIGHT);
 	}
-	BriefingBackdrop->Fill(0);
-
-	DebugString("Restate: layout enlarged %dx for a %dx%d frame\n", BriefingScale, frame_width, frame_height);
+	if (BriefingBackdrop == NULL) {
+		BriefingBackdrop = new DSurface(BRIEFING_WIDTH, BRIEFING_HEIGHT);
+	}
+	BriefingPage->Fill(0);
+	CenterX = 0;
+	CenterY = 0;
 	file.Close();
 
 	if (strlen(Scenario->BriefingText)) {
@@ -498,9 +484,6 @@ bool RestateMission::Init(ScenarioClass * scen)
 		return(false);
 	}
 
-	// the text is enlarged with the layout, a pixel of the font at a time
-	Font->Set_Scale(BriefingScale);
-
 	Drawer = Create_Drawer("MAPSEL.PAL");
 	if (Drawer == NULL) {
 		DebugString("Restate: Unable to create animation drawer!\n");
@@ -510,7 +493,8 @@ bool RestateMission::Init(ScenarioClass * scen)
 	/*
 	**	Other inits.
 	*/
-	LogicalSurface = HiddenSurface;
+	Set_Page(BriefingPage);
+	LogicalSurface = BriefingPage;
 
 	/*
 	**	Initialize the button structures. All are initialized, even though one (or none) may
@@ -522,10 +506,7 @@ bool RestateMission::Init(ScenarioClass * scen)
 									_buttons[i].ID,
 									_buttons[i].Text,
 									TPF_BUTTON,
-									_buttons[i].Area.X * BriefingScale,
-									_buttons[i].Area.Y * BriefingScale,
-									_buttons[i].Area.Width * BriefingScale,
-									_buttons[i].Area.Height * BriefingScale
+									_buttons[i].Area.X, _buttons[i].Area.Y, _buttons[i].Area.Width, _buttons[i].Area.Height
 									);
 
 		if (btn == NULL) {
@@ -549,11 +530,11 @@ bool RestateMission::Init(ScenarioClass * scen)
 	MyButton *video = Get_Button(BUTTON_VIDEO);
 
 	if (scen->BriefMovie == VQ_NONE) {
-		resume->X = CenterX + (BRIEFING_BASE_WIDTH * BriefingScale - resume->Width) / 2;
+		resume->X = CenterX + (640 - resume->Width) / 2;
 		resume->Y += CenterY;
 	} else {
 		int width = std::max(resume->Width, video->Width);
-		int xx = (2 * (320 * BriefingScale - width) / 4);
+		int xx = (2 * (320 - width) / 4);
 
 		resume->X = xx + CenterX;
 		resume->Y += CenterY - resume->Height / 2;
@@ -563,6 +544,8 @@ bool RestateMission::Init(ScenarioClass * scen)
 		video->Y += CenterY - video->Height / 2;
 		video->Width = width;
 	}
+
+	HiddenSurface->Fill(0);
 
 	return(true);
 }
@@ -575,6 +558,12 @@ bool RestateMission::Init(ScenarioClass * scen)
 /// </summary>
 void RestateMission::Cleanup(void)
 {
+	// the briefing returns the engine to the frame it usually draws on
+	Set_Page(NULL);
+
+	if (BriefingPage != NULL) {
+		BriefingPage->Fill(0);
+	}
 	if (BriefingBackdrop != NULL) {
 		BriefingBackdrop->Fill(0);
 	}
@@ -616,6 +605,30 @@ void RestateMission::Do_Custom_Draw(Surface *surface)
 
 
 /// <summary>
+/// Where the mouse is, measured on the briefing page rather than on the frame.
+/// The page is stretched onto the frame when it is shown, so a position on the frame maps
+/// back onto the page by the same ratio.
+/// </summary>
+static Point2D Page_Mouse_Point(void)
+{
+	POINT point;
+	GetCursorPos(&point);
+	Screen_Point_To_Game(point);
+
+	if (BriefingPage == NULL || HiddenSurface == NULL) {
+		return(Point2D(point.x, point.y));
+	}
+
+	int const width = HiddenSurface->Get_Width();
+	int const height = HiddenSurface->Get_Height();
+
+	return(Point2D(
+		point.x * BriefingPage->Get_Width() / (width > 0 ? width : 1),
+		point.y * BriefingPage->Get_Height() / (height > 0 ? height : 1)));
+}
+
+
+/// <summary>
 /// Handles the player's input during the mission restatement.
 /// This routine polls the button list until the player picks one of the offered choices,
 /// or dismisses the page with the space bar or the escape key.
@@ -632,7 +645,8 @@ bool RestateMission::User_Input(void)
 	do {
 		Wait_For_Focus();
 		if (ButtonList != NULL) {
-			input = ButtonList->Input();
+			// the buttons are laid out on the page, so the mouse is measured there too
+			input = ButtonList->Input_At(Page_Mouse_Point());
 		} else {
 			if (Keyboard->Check() != KN_NONE) {
 				input = Keyboard->Get();
