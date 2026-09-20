@@ -61,6 +61,8 @@
 
 #include "scenario.h"
 
+#include "superpanel.h"
+
 #include "_bench.h"
 #include "_deploymentconfig.h"
 #include "_keyboar.h"
@@ -2028,6 +2030,12 @@ ScenarioState Read_Scenario_INI(CCINIClass const & ini, bool is_mapgen)
 	**	Read in the map control values. This includes dimensions
 	**	as well as theater information.
 	*/
+	/*
+	**	The super power panel is read with the mission, so a mission can hand out its own set.
+	*/
+	SuperPanel.Read_INI(ini);
+	SuperPanel.Reset();
+
 	if (!Map.Read_INI(ini)) {
 		return(ScenarioState::TerrainDamaged);
 	}
@@ -3420,6 +3428,7 @@ void ScenarioClass::Serialize(SaveStreamClass & stream)
 	stream.Serialize(IsGlobalChanged);
 	stream.Serialize(IsAmbientLightChanged);
 	stream.Serialize(IsEndOfGame);
+	SuperPanel.Serialize(stream);
 	stream.Serialize(IsInheritTimer);
 	stream.Serialize(IsSkipScore);
 	stream.Serialize(IsOneTimeOnly);

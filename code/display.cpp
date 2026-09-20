@@ -87,6 +87,8 @@
 
 #include "display.h"
 
+#include "superpanel.h"
+
 #include "_alpha.h"
 #include "_astar.h"
 #include "_convert.h"
@@ -883,8 +885,21 @@ void DisplayClass::Cursor_Mark(Cell const &pos, bool on)
  *   12/31/1994 JLB : Takes mouse coordinates as parameters.                                   *
  *   06/27/1995 JLB : Breaks out of rubber band mode if mouse leaves map.                      *
  *=============================================================================================*/
+/// <summary>
+/// Runs the super power panel alongside the battlefield: the timers, the clicks and the strip.
+/// </summary>
+static void Super_Panel_Frame(KeyNumType & input, Point2D const & xy)
+{
+	SuperPanel.AI(input, xy);
+	SuperPanel.Draw(*HiddenSurface, TacticalRect);
+}
+
+
 void DisplayClass::AI(KeyNumType & input, Point2D const & xy)
 {
+	// the super power strip is part of the battlefield: it charges and takes clicks here
+	SuperPanel.AI(input, xy);
+	SuperPanel.Draw(*HiddenSurface, TacticalRect);
 	BASECLASS::AI(input, xy);
 }
 
