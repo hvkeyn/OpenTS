@@ -204,8 +204,24 @@ char const * Other_Game_Directory(void)
 		} else {
 			std::string const & data = Data_Directory();
 
+			/*
+			**	Games kept beside each other are named for the game they hold, so both
+			**	spellings are tried and the one that is really installed answers.
+			*/
 			if (!data.empty()) {
-				resolved = data + "..\\TwistedInsurrection\\";
+				char const * const _siblings[] = {
+					"..\\TwistedInsurrection\\",
+					"..\\TiberianSun\\",
+				};
+
+				for (char const * sibling : _siblings) {
+					std::string candidate = data + sibling;
+
+					if (RawFileClass((candidate + "Game.exe").c_str()).Is_Available()) {
+						resolved = candidate;
+						break;
+					}
+				}
 			}
 		}
 	}
