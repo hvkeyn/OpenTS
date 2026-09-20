@@ -885,21 +885,13 @@ void DisplayClass::Cursor_Mark(Cell const &pos, bool on)
  *   12/31/1994 JLB : Takes mouse coordinates as parameters.                                   *
  *   06/27/1995 JLB : Breaks out of rubber band mode if mouse leaves map.                      *
  *=============================================================================================*/
-/// <summary>
-/// Runs the super power panel alongside the battlefield: the timers, the clicks and the strip.
-/// </summary>
-static void Super_Panel_Frame(KeyNumType & input, Point2D const & xy)
-{
-	SuperPanel.AI(input, xy);
-	SuperPanel.Draw(*HiddenSurface, TacticalRect);
-}
-
-
 void DisplayClass::AI(KeyNumType & input, Point2D const & xy)
 {
-	// the super power strip charges here and takes its clicks here; it is drawn when the
-	// frame is put together, after the battlefield render has had its say
-	SuperPanel.AI(input, xy);
+	// the super power strip charges its timers once per frame. Its clicks arrive with the
+	// mouse messages of the battlefield, so a click on a square can never turn into an order
+	// for the unit standing under it.
+	SuperPanel.Logic();
+
 	BASECLASS::AI(input, xy);
 }
 

@@ -19,8 +19,10 @@
 #include "crc.h"
 #include "dialog.h"
 #include "display.h"
+#include "dsurface.h"
 #include "foot.h"
 #include "globals.h"
+#include "goptions.h"
 #include "house.h"
 #include "infantry.h"
 #include "infatype.h"
@@ -48,7 +50,22 @@ SuperPanelClass SuperPanel;
 
 static char const * const SUPERPOWERS_INI = "SUPERPOWERS.INI";
 static char const * const PANEL_SECTION = "Panel";
-static int const PANEL_CELL = 28;
+static int const PANEL_CELL = 32;			// the size of one square of the strip
+static int const PANEL_GAP = 2;				// the space between two squares
+static int const PANEL_COLUMNS = 2;			// squares across; the rest stack below
+static int const PANEL_MARGIN = 6;			// the gap between the strip and the sidebar
+
+/*
+** The shades the strip is painted in. It lands on the battlefield, which is a hicolor
+** surface, so the colors have to be built as pixels of that surface and not taken from the
+** palette the artwork uses.
+*/
+static int const PANEL_PLATE = DSurface::Build_Hicolor_Pixel(6, 6, 6);
+static int const PANEL_CELL_BACK = DSurface::Build_Hicolor_Pixel(18, 18, 18);
+static int const PANEL_FRAME_READY = DSurface::Build_Hicolor_Pixel(0, 190, 0);
+static int const PANEL_FRAME_WAITING = DSurface::Build_Hicolor_Pixel(96, 96, 96);
+static int const PANEL_BAR_READY = DSurface::Build_Hicolor_Pixel(0, 255, 0);
+static int const PANEL_BAR_CHARGING = DSurface::Build_Hicolor_Pixel(0, 96, 0);
 
 
 /// <summary>
@@ -277,6 +294,12 @@ void SuperPanelClass::Reset(void)
 {
 	for (int index = 0; index < SlotCount; index++) {
 		Slots[index].Reset();
+
+		// the test set hands every ability over at once, so that all of them can be tried
+		if (TestAll) {
+			Slots[index].Cooldown = 0;
+			Slots[index].Charges = 99;
+		}
 	}
 }
 
@@ -288,16 +311,49 @@ int SuperPanelClass::Count(void) const
 
 
 /// <summary>
-/// The screen rectangle of one cell of the strip.
-/// The strip runs along the top of the battlefield against the sidebar, so the unit buttons,
-/// the radar and the briefing screens are all left where they are.
+/// The place the strip takes on the screen: a block of squares hung beside the radar, just
+/// clear of the sidebar. Nothing that belongs to the sidebar, to the battlefield or to the
+/// briefing screens is moved or covered by it.
 /// </summary>
-Rect SuperPanelClass::Cell_Rect(int index, Rect const & view) const
+/// <returns>The screen rectangle of the whole strip.</returns>
+Rect SuperPanelClass::Strip_Rect(void)
 {
-	int const total = MAX_SLOTS * PANEL_CELL;
-	int const left = view.X + view.Width - total;
+	int const rows = (MAX_SLOTS + PANEL_COLUMNS - 1) / PANEL_COLUMNS;
+	int const width = PANEL_COLUMNS * PANEL_CELL + (PANEL_COLUMNS - 1) * PANEL_GAP;
+	int const height = rows * PANEL_CELL + (rows - 1) * PANEL_GAP;
 
-	return(Rect(left + index * PANEL_CELL, view.Y, PANEL_CELL, PANEL_CELL));
+	int left;
+	if (Options.IsSidebarOnRight) {
+		left = SidebarRect.X - PANEL_MARGIN - width;
+	} else {
+		left = SidebarRect.X + SidebarRect.Width + PANEL_MARGIN;
+	}
+
+	// the strip hangs beside the radar, so that the two of them line up
+	Rect const radar = SidebarClass::Sidebar_Radar_Rect();
+	int top = radar.Y + (radar.Height - height) / 2;
+	if (top < TacticalRect.Y) {
+		top = TacticalRect.Y;
+	}
+
+	return(Rect(left, top, width, height));
+}
+
+
+/// <summary>
+/// One square of the strip. The squares fill a column at a time, so that a strip of six
+/// abilities reads as two neat columns of three.
+/// </summary>
+Rect SuperPanelClass::Cell_Rect(int index, Rect const & strip) const
+{
+	int const rows = (MAX_SLOTS + PANEL_COLUMNS - 1) / PANEL_COLUMNS;
+	int const column = index / rows;
+	int const row = index % rows;
+
+	return(Rect(strip.X + column * (PANEL_CELL + PANEL_GAP),
+		strip.Y + row * (PANEL_CELL + PANEL_GAP),
+		PANEL_CELL,
+		PANEL_CELL));
 }
 
 
@@ -309,39 +365,41 @@ static bool point_in_rect(Point2D const & point, Rect const & rect)
 
 
 /// <summary>
-/// Runs the panel: charges the timers and takes a click on a charged cell.
-/// The ability is applied at the cell under the cursor, so no separate targeting mode is
-/// needed.
+/// Turns the charge of every square on by one frame. The panel is charged from the map's own
+/// frame routine, so the timers run at the rate of the game and never stall while the mouse
+/// is standing still.
 /// </summary>
-void SuperPanelClass::AI(KeyNumType & input, Point2D const & xy)
+void SuperPanelClass::Logic(void)
 {
-	if (SlotCount == 0) return;
-
-	// the panel charges once per logical frame, however often this is called
-	static unsigned last_frame = 0xFFFFFFFF;
-	if (last_frame != Frame) {
-		last_frame = Frame;
-		for (int index = 0; index < SlotCount; index++) {
-			Slots[index].Charge_Up();
-		}
+	for (int index = 0; index < SlotCount; index++) {
+		Slots[index].Charge_Up();
 	}
+}
 
-	if ((input & KN_BUTTON) == 0 && input != KN_LMOUSE) {
-		return;
-	}
+
+/// <summary>
+/// Spends the ability of the square the player clicked, if that square is charged. The
+/// ability lands on the spot that was clicked, so no separate targeting mode is needed.
+/// </summary>
+/// <param name="screen">Where the mouse was, in screen coordinates.</param>
+/// <returns>Was the click spent on the panel? A false answer leaves it to the battlefield.</returns>
+bool SuperPanelClass::Fire_At(Point2D const & screen)
+{
+	if (SlotCount == 0) return(false);
+
+	Rect const strip = Strip_Rect();
 
 	for (int index = 0; index < SlotCount; index++) {
 		if (!Slots[index].Is_Ready()) continue;
+		if (!point_in_rect(screen, Cell_Rect(index, strip))) continue;
 
-		Rect cell = Cell_Rect(index, TacticalRect);
-		if (point_in_rect(xy, cell)) {
-			Cell target = Map.Click_Cell_Calc(xy);
-			if (Fire_Slot(index, target)) {
-				input = KN_NONE;
-			}
-			break;
-		}
+		Cell target = Map.Click_Cell_Calc(screen);
+		DebugString("SuperPanel: %s at %d,%d\n", Slots[index].Name, target.X, target.Y);
+
+		return(Fire_Slot(index, target));
 	}
+
+	return(false);
 }
 
 
@@ -534,30 +592,54 @@ bool SuperPanelClass::Damage_Area(Cell const & cell, int radius, int strength, c
 
 
 /// <summary>
-/// Draws the strip: one cell per ability, with the charge shown as a bar and the seconds
+/// Draws the strip onto the battlefield itself, which is the surface the finished frame is
+/// put together on. The strip only shows while a mission is being played, so the menus and
+/// the briefing dialogs are left alone, and the buttons are drawn after it, which hides it
+/// for as long as a dialog is open.
+/// </summary>
+void SuperPanelClass::Draw_On_Field(Surface & surface)
+{
+	if (SlotCount == 0 || !ScenarioActive || !Map.IsSidebarActive) return;
+
+	Rect strip = Strip_Rect();
+
+	// the battlefield surface has its own origin, which is not the corner of the screen
+	strip.X -= TacticalRect.X;
+
+	Draw(surface, strip);
+}
+
+
+/// <summary>
+/// Draws the strip: one square per ability, with the charge shown as a bar and the seconds
 /// left, or the number of uses once it is charged.
 /// </summary>
-void SuperPanelClass::Draw(Surface & surface, Rect const & view)
+void SuperPanelClass::Draw(Surface & surface, Rect const & strip)
 {
-	if (SlotCount == 0 || !Map.IsSidebarActive) return;
+	if (SlotCount == 0) return;
+
+	// a plate behind the squares, so that the strip stands apart from the battlefield
+	Rect plate(strip.X - 3, strip.Y - 3, strip.Width + 6, strip.Height + 6);
+	surface.Fill_Rect(plate, PANEL_PLATE);
+	surface.Draw_Rect(plate, PANEL_FRAME_WAITING);
 
 	for (int index = 0; index < SlotCount; index++) {
-		Rect cell = Cell_Rect(index, view);
+		Rect cell = Cell_Rect(index, strip);
 		SuperPanelAbilityClass const & ability = Slots[index];
 
-		surface.Fill_Rect(cell, BLACK);
-		surface.Draw_Rect(cell, ability.Is_Ready() ? WHITE : GREY);
+		surface.Fill_Rect(cell, PANEL_CELL_BACK);
+		surface.Draw_Rect(cell, ability.Is_Ready() ? PANEL_FRAME_READY : PANEL_FRAME_WAITING);
 
 		// a full cell behind the frame tells the player it is charged
 		if (ability.Is_Ready()) {
-			surface.Fill_Rect(Rect(cell.X + 1, cell.Y + 1, cell.Width - 2, 2), WHITE);
+			surface.Fill_Rect(Rect(cell.X + 1, cell.Y + 1, cell.Width - 2, 3), PANEL_BAR_READY);
 		} else if (ability.Is_Available()) {
-			int height = cell.Height - 3;
+			int height = cell.Height - 4;
 			int charged = (ability.Charge > 0)
 				? (height * (ability.Charge * TICKS_PER_SECOND - ability.Cooldown)) / (ability.Charge * TICKS_PER_SECOND)
 				: height;
 			if (charged > 0) {
-				surface.Fill_Rect(Rect(cell.X + 1, cell.Y + cell.Height - 2 - charged, cell.Width - 2, charged), GREY);
+				surface.Fill_Rect(Rect(cell.X + 1, cell.Y + cell.Height - 2 - charged, cell.Width - 2, charged), PANEL_BAR_CHARGING);
 			}
 		}
 
@@ -568,7 +650,7 @@ void SuperPanelClass::Draw(Surface & surface, Rect const & view)
 		label[2] = '\0';
 
 		Fancy_Text_Print(label, surface, surface.Get_Rect(), Point2D(cell.X + cell.Width / 2, cell.Y + 6),
-			Fetch_Scheme_By_Name("Green"), BLACK, TextPrintType(TPF_CENTER));
+			Fetch_Scheme_By_Name("Green"), TBLACK, TextPrintType(TPF_CENTER|TPF_NOSHADOW));
 
 		char info[16];
 		if (ability.Is_Ready()) {
@@ -578,7 +660,8 @@ void SuperPanelClass::Draw(Surface & surface, Rect const & view)
 		}
 
 		Fancy_Text_Print(info, surface, surface.Get_Rect(), Point2D(cell.X + cell.Width - 2, cell.Y + cell.Height - 9),
-			Fetch_Scheme_By_Name(ability.Is_Ready() ? "Green" : "Grey"), BLACK, TextPrintType(TPF_RIGHT));
+			Fetch_Scheme_By_Name(ability.Is_Ready() ? "Green" : "Grey"), TBLACK,
+			TextPrintType(TPF_RIGHT|TPF_NOSHADOW));
 	}
 }
 

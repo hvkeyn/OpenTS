@@ -61,6 +61,7 @@
 #include "keyboard.h"
 #include "savestream.h"
 #include "session.h"
+#include "superpanel.h"
 #include "surface.h"
 #include "tactical.h"
 #include "video.h"
@@ -397,6 +398,10 @@ void GScreenClass::Render(void)
 	TacticalMap->Render(*CompositeSurface, redraw, DRAW_PASS_BACKGROUND);
 	Draw_It(complete);
 	TacticalMap->Render(*CompositeSurface, redraw, DRAW_PASS_FOREGROUND);
+
+	// the super power strip is not a gadget, so it is painted straight onto the frame here:
+	// after the battlefield, but before the buttons, which cover it while a dialog is open
+	SuperPanel.Draw_On_Field(*CompositeSurface);
 
 	if (Buttons) Buttons->Draw_All(false);
 

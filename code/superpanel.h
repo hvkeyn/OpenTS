@@ -97,8 +97,10 @@ class SuperPanelClass
 		void One_Time(void);
 		void Read_INI(CCINIClass const & ini);
 		void Reset(void);
-		void AI(KeyNumType & input, Point2D const & xy);
-		void Draw(Surface & surface, Rect const & view);
+		void Logic(void);
+		void Draw(Surface & surface, Rect const & strip);
+		void Draw_On_Field(Surface & surface);
+		bool Fire_At(Point2D const & screen);
 		void Serialize(SaveStreamClass & stream);
 		void Compute_CRC(CRCEngine & crc) const;
 
@@ -106,7 +108,9 @@ class SuperPanelClass
 		SuperPanelAbilityClass & operator[](int index) { return(Slots[index]); }
 		SuperPanelAbilityClass const & operator[](int index) const { return(Slots[index]); }
 
-		Rect Cell_Rect(int index, Rect const & view) const;
+		/// The screen rectangle of the whole strip and of one square inside it.
+		static Rect Strip_Rect(void);
+		Rect Cell_Rect(int index, Rect const & strip) const;
 
 	protected:
 		bool Fire_Slot(int index, Cell const & cell);

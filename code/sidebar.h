@@ -112,6 +112,9 @@ class SidebarClass : public PowerClass
 
 		virtual void AI(KeyNumType & input, Point2D const & xy) override;
 		virtual void Draw_It(bool complete) override;
+
+		/// The screen rectangle of the radar, for anything that sits beside it.
+		static Rect Sidebar_Radar_Rect(void);
 		virtual void Reposition_Sidebar(void) override;
 		virtual char const * Help_Text(int id) override;
 

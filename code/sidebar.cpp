@@ -76,6 +76,8 @@
 
 #include "sidebar.h"
 
+#include "superpanel.h"
+
 #include "_bench.h"
 #include "_convert.h"
 #include "_map.h"
@@ -926,6 +928,22 @@ bool SidebarClass::Page(bool up, int column)
  *   10/28/94   JLB : Created.                                                                 *
  *   12/31/1994 JLB : Split rendering off into the sidebar strip class.                        *
  *=============================================================================================*/
+/// <summary>
+/// The screen rectangle of the radar box. Anything drawn beside the radar - the super power
+/// strip among it - lines itself up with it.
+/// </summary>
+/// <returns>The screen rectangle of the radar.</returns>
+Rect SidebarClass::Sidebar_Radar_Rect(void)
+{
+	if (RadarButton.Width > 0 && RadarButton.Height > 0) {
+		return(Rect(RadarButton.X, RadarButton.Y, RadarButton.Width, RadarButton.Height));
+	}
+
+	// before the radar is built, the top of the sidebar is where it is going to be put
+	return(Rect(SidebarRect.X, 16, SidebarRect.Width, 140));
+}
+
+
 void SidebarClass::Draw_It(bool complete)
 {
 	complete = complete || IsForceCompleteRedraw;

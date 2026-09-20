@@ -57,6 +57,7 @@
 #include "overtype.h"
 #include "rules.h"
 #include "savestream.h"
+#include "superpanel.h"
 #include "suprtype.h"
 #include "surface.h"
 #include "tactical.h"
@@ -647,6 +648,13 @@ void ScrollClass::Message_Handler(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 			if (IsMouseDown == false) {
 
 				POINTS pts = MAKEPOINTS(lParam);
+
+				// a click on the super power strip is spent on the ability under the cursor and
+				// never reaches the battlefield, so that no order is given by mistake
+				if (SuperPanel.Fire_At(Point2D(pts.x, pts.y))) {
+					break;
+				}
+
 				point.X = pts.x - TacticalRect.X;
 				point.Y = pts.y - TacticalRect.Y;
 
