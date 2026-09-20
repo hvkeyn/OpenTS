@@ -1752,6 +1752,12 @@ bool Parse_Command_Line(int argc, char * argv[])
 			continue;
 		}
 
+		// A launcher naming which of the games installed here to play.
+		if (strnicmp(string, "-GAME=", strlen("-GAME=")) == 0) {
+			Set_Game_Type_Preset(&original[strlen("-GAME=")]);
+			continue;
+		}
+
 		// A client asking the game to launch what SPAWN.INI describes.
 		if (stricmp(string, "-SPAWN") == 0) {
 			Spawner_Request();

@@ -29,6 +29,8 @@ AddonType Get_Required_Addon(void);
 void Set_Required_Addon(AddonType addon);
 const char *Get_Addon_Title(AddonType addon);
 bool Select_Game_Type_Dialog(AddonType &type);
+void Set_Game_Type_Preset(char const * name);
+bool Get_Game_Type_Preset(AddonType & type);
 
 AddonType operator++(AddonType & val);
 AddonType operator--(AddonType & val);

@@ -25,6 +25,14 @@ int AvailableAddOns = 1 << ADDON_BASE_GAME;
 int ActiveAddOns = 1 << ADDON_BASE_GAME;
 AddonType RequiredAddon = ADDON_BASE_GAME;
 
+/*
+ * An installation may hold more than one game, each in a folder of its own, and the launcher
+ * that starts the game names the one it wants. A game named this way is settled here rather
+ * than by the dialog, whose question nobody would be left to answer.
+ */
+static bool GameTypePresetGiven = false;
+static AddonType GameTypePreset = ADDON_BASE_GAME;
+
 /// <summary>
 /// Steps an addon type on to the value after it.
 /// </summary>
@@ -60,6 +68,21 @@ bool Select_Game_Type_Dialog(AddonType &type)
 	int retval;
 
 	type = ADDON_BASE_GAME;
+
+	/*
+	**	The launcher has already answered the question, so the game it named is set up here
+	**	exactly as the dialog below would have set it up.
+	*/
+	if (Get_Game_Type_Preset(type)) {
+		if (type == ADDON_FIRESTORM) {
+			Enable_Addon(ADDON_FIRESTORM);
+		} else {
+			Disable_Addon(ADDON_ANY);
+		}
+
+		Set_Required_Addon(type);
+		return(true);
+	}
 
 	if (Addon_Installed(ADDON_ANY)) {
 		HWND dialog = OwnerDraw::Begin_Dialog(IDD_SELECT_GAME_TYPE, Select_Game_Type_Dialog_Proc);
@@ -127,6 +150,41 @@ INT_PTR CALLBACK Select_Game_Type_Dialog_Proc(HWND window, UINT message, WPARAM 
 	}
 
 	return(rc);
+}
+
+
+/// <summary>
+/// Records the game a launcher asked for, named by the option it was passed.
+/// An unrecognized name leaves the choice to the dialog, which is what happens when the game
+/// is started directly.
+/// </summary>
+/// <param name="name">The name from the command line, such as "TS" or "FIRESTORM".</param>
+void Set_Game_Type_Preset(char const * name)
+{
+	if (name == NULL) return;
+
+	if (stricmp(name, "TS") == 0 || stricmp(name, "TIBSUN") == 0
+		|| stricmp(name, "TIBERIAN SUN") == 0 || stricmp(name, "BASE") == 0) {
+		GameTypePreset = ADDON_BASE_GAME;
+		GameTypePresetGiven = true;
+	} else if (stricmp(name, "FS") == 0 || stricmp(name, "FIRESTORM") == 0) {
+		GameTypePreset = ADDON_FIRESTORM;
+		GameTypePresetGiven = true;
+	}
+}
+
+
+/// <summary>
+/// Fetches the game a launcher asked for.
+/// </summary>
+/// <param name="type">Receives the name of the game.</param>
+/// <returns>bool; Did the command line name a game?</returns>
+bool Get_Game_Type_Preset(AddonType & type)
+{
+	if (!GameTypePresetGiven) return(false);
+
+	type = GameTypePreset;
+	return(true);
 }
 
 
