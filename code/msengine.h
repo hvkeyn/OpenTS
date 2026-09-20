@@ -40,6 +40,15 @@ class MSEngine
 		void Blit_All(Surface * surface);
 		void Blit_Rect(Surface * surface, Rect const & rect);
 
+		/*
+		 * A screen that was laid out for the 640 by 400 display draws onto a page of its
+		 * own and has that page stretched onto the frame when it presents itself. A screen
+		 * that sets no page draws straight onto the frame, as it always has.
+		 */
+		void Set_Page(Surface * page) { StagedPage = page; }
+		Surface * Get_Page(void) const;
+		void Present_Page(void);
+
 		void Wait_Delay(int delay);
 		void Wait_For_Focus(void);
 
@@ -71,4 +80,10 @@ class MSEngine
 		 * one is asked to be played. The engine owns them and destroys them with itself.
 		 */
 		DynamicVectorClass<MSSfx *> Sounds;
+
+		/*
+		 * This is the page a staged screen draws on, or NULL when the screen draws on the
+		 * frame itself.
+		 */
+		Surface * StagedPage;
 };

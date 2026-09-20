@@ -16,6 +16,7 @@
 #include "dbgprint.h"
 #include "audio/audioengine.h"
 #include "globals.h"
+#include "gscreen.h"
 #include "goptions.h"
 #include "video.h"
 #include "msanim.h"
@@ -39,6 +40,7 @@
 MSEngine::MSEngine(void)
 {
 	RectCount = 0;
+	StagedPage = NULL;
 
 	Rects.Resize(20);
 	Anims.Clear();
@@ -162,8 +164,10 @@ void MSEngine::Wait_For_Anim(MSAnim * anim, unsigned delay)
 /// </summary>
 void MSEngine::Restore_And_Advance(void)
 {
-	_RebuildFromAlternate = true;
-	Advance(HiddenSurface);
+	// a staged page is painted again from its own artwork when it presents itself, so
+	// there is no alternate picture to be rebuilt from
+	_RebuildFromAlternate = (StagedPage == NULL);
+	Advance(Get_Page());
 }
 
 
@@ -318,6 +322,40 @@ void MSEngine::Add_Update_Rect(Rect const & rect)
 /// The pending list is emptied as a result.
 /// </summary>
 /// <param name="surface">The surface holding the freshly drawn frame.</param>
+/// <summary>
+/// The surface the current screen draws on.
+/// A staged screen has a page of its own; everything else draws onto the frame.
+/// </summary>
+Surface * MSEngine::Get_Page(void) const
+{
+	return(StagedPage != NULL ? StagedPage : HiddenSurface);
+}
+
+
+/// <summary>
+/// Puts the current screen on the display.
+/// A staged page is stretched to fill the frame, so a screen written for a smaller
+/// display fills whatever resolution the game is running at. Without a page, the
+/// regions waiting to be blitted are copied to the frame as they always have been.
+/// </summary>
+void MSEngine::Present_Page(void)
+{
+	if (StagedPage == NULL) {
+		Blit_All(HiddenSurface);
+		return;
+	}
+
+	// a change of size is the one blit these surfaces stretch rather than copy
+	DebugString("Present_Page: %dx%d page onto a %dx%d frame\n",
+		StagedPage->Get_Width(), StagedPage->Get_Height(),
+		HiddenSurface->Get_Width(), HiddenSurface->Get_Height());
+	HiddenSurface->Blit_From(HiddenSurface->Get_Rect(), *StagedPage, StagedPage->Get_Rect());
+	RectCount = 0;
+
+	Update_Visible_Surface(HiddenSurface);
+}
+
+
 void MSEngine::Blit_All(Surface * surface)
 {
 	if (RectCount > 0) {
@@ -367,8 +405,8 @@ void MSEngine::Wait_Delay(int delay)
 		do {
 			Call_Back();
 			Process_Idle();
-			Advance(HiddenSurface);
-			Blit_All(HiddenSurface);
+			Advance(Get_Page());
+			Present_Page();
 			Windows_Message_Handler();
 
 			if (!GameInFocus) {

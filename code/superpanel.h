@@ -50,7 +50,9 @@ class SuperPanelAbilityClass
 			ABILITY_AIR_REINFORCE,
 			ABILITY_UNIT_REINFORCE,
 			ABILITY_TIBERIUM_SEED,
-			ABILITY_ARMOR_BOOST
+			ABILITY_ARMOR_BOOST,
+			ABILITY_RECON,
+			ABILITY_BARRAGE
 		};
 
 		enum DeliveryType {
@@ -141,6 +143,8 @@ class SuperPanelClass
 		void Aim_At(int index);
 		bool Place_Squad(SuperPanelAbilityClass const & ability, Cell const & cell, bool airborne);
 		bool Place_Seed(Cell const & cell, int radius, char const * overlay_name);
+		bool Reveal_Area(Cell const & cell, int radius);
+		bool Barrage(Cell const & cell, int shells, int radius, int strength, char const * warhead_name);
 		bool Damage_Area(Cell const & cell, int radius, int strength, char const * warhead_name, bool tiberium);
 
 	public:

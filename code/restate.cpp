@@ -40,8 +40,33 @@
 #include "winstub.h"
 
 #include "dialog.hh"
+#include "dsurface.h"
+#include "_surface.h"
 
 #include <algorithm>
+
+/*
+** The briefing was laid out for a 640 by 400 display, which is the screen the mission
+** restatement was written for. It is drawn onto a page of that size and that page is
+** stretched onto the frame when the briefing is shown, so the briefing fills whatever
+** resolution the game is running at instead of sitting in the middle of a wide screen.
+*/
+static int const BRIEFING_WIDTH = 640;
+static int const BRIEFING_HEIGHT = 400;
+
+/// The page the briefing is drawn on, and the untouched artwork behind it.
+static Surface * BriefingPage = NULL;
+static Surface * BriefingBackdrop = NULL;
+
+/// <summary>
+/// The surface the briefing draws on: its own page while one is set up, and the frame
+/// otherwise.
+/// </summary>
+static Surface * Page_Surface(void)
+{
+	return(BriefingPage != NULL ? BriefingPage : HiddenSurface);
+}
+
 
 class MyButton : public TextButtonClass {
 	public:
@@ -76,7 +101,7 @@ class MyButton : public TextButtonClass {
 		void Draw(void)
 		{
 			Rect rect(X, Y, Width + 1, Height + 1);
-			HiddenSurface->Blit_From(rect, *AlternateSurface, rect);
+			Page_Surface()->Blit_From(rect, *BriefingBackdrop, rect);
 			Engine->Add_Update_Rect(rect);
 		}
 
@@ -127,7 +152,7 @@ class MyButton : public TextButtonClass {
 			source_rect.X = 0;
 			dest_rect.Height = height;
 			source_rect.Height = height;
-			HiddenSurface->Blit_From(dest_rect, *image, source_rect);
+			Page_Surface()->Blit_From(dest_rect, *image, source_rect);
 
 			sprintf(buffer, "b%ce_mi%d.pcx", IsPressed != false ? 'd' : 'u', height);
 			image = SurfaceCache.GetSurface(buffer);
@@ -135,7 +160,7 @@ class MyButton : public TextButtonClass {
 			rect.X += small_width;
 			rect.Width -= width;
 			rect.Height = image->Get_Height();
-			SurfaceCache.Draw(rect, *HiddenSurface, *image, 0, 0);
+			SurfaceCache.Draw(rect, *Page_Surface(), *image, 0, 0);
 
 			sprintf(buffer, "b%ce_ri%d.pcx", IsPressed != false ? 'd' : 'u', height);
 			image = SurfaceCache.GetSurface(buffer);
@@ -147,7 +172,7 @@ class MyButton : public TextButtonClass {
 			source_rect.Width = dest_rect.Width;
 			source_rect.Y = 0;
 			source_rect.X = 0;
-			HiddenSurface->Blit_From(dest_rect, *image, source_rect);
+			Page_Surface()->Blit_From(dest_rect, *image, source_rect);
 		}
 
 		/// <summary>
@@ -162,7 +187,7 @@ class MyButton : public TextButtonClass {
 				rect.X += 2;
 				rect.Y += 4;
 			}
-			OD_Draw_Text_Remap(*HiddenSurface, text, rect, "dlgsys", ODColorText, 5, 0);
+			OD_Draw_Text_Remap(*Page_Surface(), text, rect, "dlgsys", ODColorText, 5, 0);
 		}
 
 
@@ -306,10 +331,10 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			MouseCursor->Release_Mouse();
 			Hide_Mouse();
 
-			Load_Title_Screen("SCORE.PCX", AlternateSurface, &CCPalette);
-			HiddenSurface->Blit_From(*AlternateSurface);
-			Add_Update_Rect(HiddenSurface->Get_Rect());
-			Blit_All(HiddenSurface);
+			Load_Title_Screen("SCORE.PCX", BriefingBackdrop, &CCPalette);
+			BriefingPage->Blit_From(*BriefingBackdrop);
+			Add_Update_Rect(BriefingPage->Get_Rect());
+			Present_Page();
 
 			if (strlen(BriefingText) != 0) {
 				Rect rect(CenterX + 110, CenterY + 60, 420, 280);
@@ -337,7 +362,7 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 						More_Button(StringRect.X + StringRect.Width / 2, StringRect.Y + StringRect.Height);
 						Hide_Mouse();
 
-						HiddenSurface->Blit_From(rect, *AlternateSurface, rect);
+						BriefingPage->Blit_From(rect, *BriefingBackdrop, rect);
 						Add_Update_Rect(rect);
 					}
 				}
@@ -358,9 +383,9 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			result = User_Input();
 			Hide_Mouse();
 
-			HiddenSurface->Fill(0);
-			Add_Update_Rect(HiddenSurface->Get_Rect());
-			Blit_All(HiddenSurface);
+			BriefingPage->Fill(0);
+			Add_Update_Rect(BriefingPage->Get_Rect());
+			Present_Page();
 
 			Cleanup();
 			Keyboard->Clear();
@@ -395,8 +420,18 @@ bool RestateMission::Init(ScenarioClass * scen)
 	}
 
 	Scenario = scen;
-	CenterX = (HiddenSurface->Get_Width() - 640) / 2;
-	CenterY = (HiddenSurface->Get_Height() - 400) / 2;
+
+	// the briefing is measured against its own page and stretched when it is shown, so
+	// its layout starts at the page's corner
+	if (BriefingPage == NULL) {
+		BriefingPage = new DSurface(BRIEFING_WIDTH, BRIEFING_HEIGHT);
+	}
+	if (BriefingBackdrop == NULL) {
+		BriefingBackdrop = new DSurface(BRIEFING_WIDTH, BRIEFING_HEIGHT);
+	}
+	BriefingPage->Fill(0);
+	CenterX = 0;
+	CenterY = 0;
 	file.Close();
 
 	if (strlen(Scenario->BriefingText)) {
@@ -457,7 +492,8 @@ bool RestateMission::Init(ScenarioClass * scen)
 	/*
 	**	Other inits.
 	*/
-	LogicalSurface = HiddenSurface;
+	Set_Page(BriefingPage);
+	LogicalSurface = BriefingPage;
 
 	/*
 	**	Initialize the button structures. All are initialized, even though one (or none) may
@@ -508,7 +544,6 @@ bool RestateMission::Init(ScenarioClass * scen)
 		video->Width = width;
 	}
 
-	AlternateSurface->Fill(0);
 	HiddenSurface->Fill(0);
 
 	return(true);
@@ -522,6 +557,16 @@ bool RestateMission::Init(ScenarioClass * scen)
 /// </summary>
 void RestateMission::Cleanup(void)
 {
+	// the briefing returns the engine to the frame it usually draws on
+	Set_Page(NULL);
+
+	if (BriefingPage != NULL) {
+		BriefingPage->Fill(0);
+	}
+	if (BriefingBackdrop != NULL) {
+		BriefingBackdrop->Fill(0);
+	}
+
 	String = NULL;
 	if (Font != NULL) {
 		delete Font;

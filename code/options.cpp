@@ -131,7 +131,7 @@ OptionsClass::OptionsClass(void) :
 	ScreenHeight(-1),
 	ScrollMethod(0),
 	DetailLevel(2),
-	StretchMovies(0),
+	StretchMovies(true),
 	Fullscreen(true),
 	WindowWidth(-1),
 	WindowHeight(-1),

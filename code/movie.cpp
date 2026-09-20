@@ -104,14 +104,10 @@ void Play_Movie(char const * name, ThemeType theme, bool clrscrn_after, bool str
 		bool dostretch = (stretch == true && Options.StretchMovies == true);
 
 		if (DSurface::AllowStretchBlits == true && dostretch == true && vqa->InitialRect.Is_Valid()) {
-			double scalex = (double)VisibleRect.Width / (double)vqa->InitialRect.Width;
-			double scaley = (double)VisibleRect.Height / (double)vqa->InitialRect.Height;
-			double scale = (scalex < scaley) ? scalex : scaley;
-
-			vqa->StretchRect.Width = (int)(vqa->InitialRect.Width * scale);
-			vqa->StretchRect.Height = (int)(vqa->InitialRect.Height * scale);
-			vqa->StretchRect.X = (VisibleRect.Width - vqa->StretchRect.Width) / 2;
-			vqa->StretchRect.Y = (VisibleRect.Height - vqa->StretchRect.Height) / 2;
+			// the whole frame is filled outright. A film authored for a smaller display
+			// has nothing to gain from bars of its own on a screen that is already wider
+			// than it is
+			vqa->StretchRect = VisibleRect;
 			DebugString("Stretching movie %dx%d -> %dx%d\n", vqa->InitialRect.Width, vqa->InitialRect.Height, vqa->StretchRect.Width, vqa->StretchRect.Height);
 		}
 

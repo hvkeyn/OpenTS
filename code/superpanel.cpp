@@ -15,6 +15,7 @@
 #include "dbgprint.h"
 #include "ccini.h"
 #include "cell.h"
+#include "ccrand.h"
 #include "combat.h"
 #include "conquer.h"
 #include "crc.h"
@@ -244,6 +245,8 @@ SuperPanelAbilityClass::AbilityType SuperPanelAbilityClass::Type_From_Name(char 
 	if (stricmp(name, "UNIT_REINFORCE") == 0) return(ABILITY_UNIT_REINFORCE);
 	if (stricmp(name, "TIBERIUM_SEED") == 0) return(ABILITY_TIBERIUM_SEED);
 	if (stricmp(name, "ARMOR_BOOST") == 0) return(ABILITY_ARMOR_BOOST);
+	if (stricmp(name, "RECON") == 0) return(ABILITY_RECON);
+	if (stricmp(name, "BARRAGE") == 0) return(ABILITY_BARRAGE);
 	return(ABILITY_NONE);
 }
 
@@ -346,9 +349,14 @@ bool SuperPanelAbilityClass::Read_INI(CCINIClass const & ini, char const * secti
 /// <summary>
 /// Puts the ability back to the start of a mission.
 /// </summary>
+/// <summary>
+/// Puts the ability back to the start of a mission.
+/// An ability that has not been spent yet is ready to be called straight away; it is the
+/// use itself that starts the charge over, not the mission.
+/// </summary>
 void SuperPanelAbilityClass::Reset(void)
 {
-	Cooldown = Charge * TICKS_PER_SECOND;
+	Cooldown = 0;
 	Charges = Count;
 }
 
@@ -577,9 +585,14 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 			SuperPanelAbilityClass candidate[POOL_LIMIT];
 			int count = 0;
 
+			// a mission that starts with nothing standing has no use for the powers that look
+			// after a base
+			bool const has_base = (PlayerPtr != NULL && PlayerPtr->CurBuildings > 0);
+
 			for (int index = 0; index < pool_count; index++) {
 				if (pool[index].Side != SIDE_NONE && pool[index].Side != side) continue;
 				if (pool[index].Tier > tier) continue;
+				if (!has_base && pool[index].Type == SuperPanelAbilityClass::ABILITY_ARMOR_BOOST) continue;
 
 				int at = count++;
 				while (at > 0 && candidate[at - 1].Tier < pool[index].Tier) {
@@ -784,8 +797,12 @@ bool SuperPanelClass::Click(Point2D const & screen)
 	for (int index = 0; index < SlotCount; index++) {
 		if (!point_in_rect(screen, Cell_Rect(index, strip))) continue;
 
-		if (Slots[index].Is_Available()) {
+		if (Slots[index].Is_Ready()) {
 			Aim_At(index);
+		} else if (Slots[index].Is_Available()) {
+			// the square is charging: the click is taken, but nothing happens until it is done
+			DebugString("SuperPanel: %s is charging, %d seconds left\n",
+				Slots[index].Name, Slots[index].Seconds_Left());
 		} else {
 			DebugString("SuperPanel: %s has been used up\n", Slots[index].Name);
 		}
@@ -899,6 +916,14 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 				done = Place_Seed(cell, 3, "TIB01");
 				break;
 
+			case SuperPanelAbilityClass::ABILITY_RECON:
+				done = Reveal_Area(cell, 7);
+				break;
+
+			case SuperPanelAbilityClass::ABILITY_BARRAGE:
+				done = Barrage(cell, 8, 2, 200, "HE");
+				break;
+
 			case SuperPanelAbilityClass::ABILITY_ARMOR_BOOST:
 				// the GloboTech technology: the owner's structures around the spot are repaired
 				for (int y = -4; y <= 4; y++) {
@@ -924,10 +949,14 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 	// not leave the player stuck with a target cursor
 	Map.IsTargettingMode = SUPER_NONE;
 
-	if (done) {
-		ability.Charges--;
-		ability.Cooldown = ability.Charge * TICKS_PER_SECOND;
-	}
+	DebugString("SuperPanel: %s at %d,%d %s\n", ability.Name, cell.X, cell.Y,
+		done ? "done" : "found nowhere to go");
+
+	// the use is spent and the charge starts over whatever came of the strike. An ability
+	// that put nothing on the ground - ground that was all taken, say - must not leave the
+	// player able to call it again and again.
+	ability.Charges--;
+	ability.Cooldown = ability.Charge * TICKS_PER_SECOND;
 
 	return(done);
 }
@@ -938,6 +967,48 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 /// Infantry arrive by drop pod when the delivery is airborne; anything else is placed on the
 /// ground next to the spot.
 /// </summary>
+/// <summary>
+/// Puts one arrived unit down on the ground near the cell asked for.
+/// The cell itself is tried first and then a ring of cells around it, so a squad that
+/// lands on ground that is already taken spreads out instead of being thrown away, which
+/// is what used to leave an ability with nothing to show for it.
+/// </summary>
+/// <returns>Was somewhere found for the unit to stand?</returns>
+static bool Land_Here(FootClass * object, Cell const & cell)
+{
+	for (int radius = 0; radius <= 5; radius++) {
+		for (int y = -radius; y <= radius; y++) {
+			for (int x = -radius; x <= radius; x++) {
+				if (radius > 0 && abs(x) != radius && abs(y) != radius) continue;
+
+				Cell spot(cell.X + x, cell.Y + y);
+				if (!Map.In_Radar(spot)) continue;
+
+				if (object->Unlimbo(Coord(spot), DIR_N)) {
+					object->Look();
+					object->Assign_Mission(MISSION_GUARD_AREA);
+					object->Commence();
+					return(true);
+				}
+			}
+		}
+	}
+
+	return(false);
+}
+
+
+/// <summary>
+/// Does the player's house own this kind of unit at all?
+/// A vehicle the house does not own would arrive as a stray rather than as a
+/// reinforcement, so it is passed over in favour of one that belongs to the player.
+/// </summary>
+static bool House_Owns(TechnoTypeClass const * type)
+{
+	return(PlayerPtr != NULL && type != NULL && PlayerPtr->Can_Build(type, false, false) != -1);
+}
+
+
 bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell const & cell, bool airborne)
 {
 	int placed = 0;
@@ -961,32 +1032,22 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 			continue;
 		}
 
-		Cell nearby = Map.Nearby_Location(cell, SPEED_FOOT);
-		if (!Map.In_Radar(nearby)) {
-			nearby = cell;
-		}
-
 		InfantryType itype = InfantryTypeClass::From_Name(token);
 		if (itype != INFANTRY_NONE) {
 			InfantryClass * inf = (InfantryClass *)InfantryTypes[itype]->Create_One_Of(PlayerPtr);
 			if (inf != NULL) {
 				inf->Veterancy.Set_Elite(true);
-				if (airborne) {
-					inf->Link_DropPod();
+				if (Land_Here(inf, cell)) {
+					placed++;
+				} else {
+					delete inf;
 				}
-				inf->PositionCoord = nearby;
-				inf->Look();
-				inf->Assign_Mission(MISSION_GUARD_AREA);
-				inf->Commence();
-				placed++;
 			}
 		} else {
 			UnitType utype = UnitTypeClass::From_Name(token);
-			if (utype != UNIT_NONE) {
+			if (utype != UNIT_NONE && House_Owns(UnitTypes[utype])) {
 				UnitClass * unit = new UnitClass(UnitTypes[utype], PlayerPtr);
-				if (unit != NULL && unit->Unlimbo(Coord(nearby), DIR_N)) {
-					unit->Assign_Mission(MISSION_GUARD_AREA);
-					unit->Commence();
+				if (unit != NULL && Land_Here(unit, cell)) {
 					placed++;
 				} else {
 					delete unit;
@@ -1026,6 +1087,55 @@ bool SuperPanelClass::Place_Seed(Cell const & cell, int radius, char const * ove
 	}
 
 	return(placed > 0);
+}
+
+
+/// <summary>
+/// Lifts the shroud from a circle of the map, which is what a scout buys the player.
+/// </summary>
+/// <returns>Was any ground uncovered?</returns>
+bool SuperPanelClass::Reveal_Area(Cell const & cell, int radius)
+{
+	int revealed = 0;
+
+	for (int y = -radius; y <= radius; y++) {
+		for (int x = -radius; x <= radius; x++) {
+			if ((x * x + y * y) > radius * radius) continue;
+
+			Cell spot(cell.X + x, cell.Y + y);
+			if (!Map.In_Radar(spot)) continue;
+
+			Map.Map_Cell(spot, PlayerPtr);
+			revealed++;
+		}
+	}
+
+	return(revealed > 0);
+}
+
+
+/// <summary>
+/// Brings a battery of guns down on an area.
+/// Several shells land around the spot the player picked rather than one blast, which is
+/// what a barrage looks and feels like from above.
+/// </summary>
+/// <returns>Was the barrage fired?</returns>
+bool SuperPanelClass::Barrage(Cell const & cell, int shells, int radius, int strength, char const * warhead_name)
+{
+	WarheadTypeClass const * warhead = WarheadTypeClass::From_Name(warhead_name);
+
+	if (shells <= 0) return(false);
+
+	for (int shell = 0; shell < shells; shell++) {
+		Cell spot(cell.X + Random_Pick(-radius, radius), cell.Y + Random_Pick(-radius, radius));
+		if (!Map.In_Radar(spot)) {
+			spot = cell;
+		}
+
+		Explosion_Damage(Map[spot].Cell_Coord(), strength, NULL, warhead, true);
+	}
+
+	return(true);
 }
 
 
