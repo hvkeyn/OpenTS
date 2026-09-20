@@ -15,6 +15,7 @@
 #include "keyboard.h"
 #include "rect.h"
 #include "coord.h"
+#include "side.hh"
 #include "super.hh"
 
 class CCINIClass;
@@ -77,13 +78,15 @@ class SuperPanelAbilityClass
 		static SuperWeaponType Weapon_From_Name(char const * name);
 
 	public:
+		char Section[32];                   /// the INI section the ability was read from
 		char Name[64];
 		char Description[256];
 		char Hint[128];
 		char Role[32];
 		AbilityType Type;
 		DeliveryType Delivery;
-		int Side;                           // -1 = any, otherwise the side index
+		SideType Side;                      // SIDE_NONE = the ability suits any side
+		int Tier;                           // how far into a campaign it becomes available
 		int Charge;                         // seconds of charge
 		int Count;                          // uses per mission
 		bool Tiberium;                      // leave tiberium behind
@@ -124,11 +127,16 @@ class SuperPanelClass
 		SuperPanelAbilityClass & operator[](int index) { return(Slots[index]); }
 		SuperPanelAbilityClass const & operator[](int index) const { return(Slots[index]); }
 
+		/// The game's weapon that performs the behaviour named, or SUPER_NONE.
+		static SuperWeaponType Find_Weapon(SuperWeaponType behaviour);
+
 		/// The screen rectangle of the whole strip and of one square inside it.
 		static Rect Strip_Rect(void);
 		Rect Cell_Rect(int index, Rect const & strip) const;
 
 	protected:
+		static SideType Panel_Side(void);
+		static int Mission_Tier(char const * map_name);
 		bool Fire_Slot(int index, Cell const & cell);
 		void Aim_At(int index);
 		bool Place_Squad(SuperPanelAbilityClass const & ability, Cell const & cell, bool airborne);

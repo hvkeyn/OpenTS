@@ -26,6 +26,7 @@
 #include "globals.h"
 #include "goptions.h"
 #include "house.h"
+#include "house.hh"
 #include "infantry.h"
 #include "infatype.h"
 #include "building.h"
@@ -42,6 +43,7 @@
 #include "map.h"
 #include "overlay.h"
 #include "overtype.h"
+#include "scenario.h"
 #include "savestream.h"
 #include "sidebar.h"
 #include "stimer.h"
@@ -55,6 +57,7 @@
 #include "vox.h"
 #include "warhead.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 
@@ -63,6 +66,7 @@ SuperPanelClass SuperPanel;
 
 static char const * const SUPERPOWERS_INI = "SUPERPOWERS.INI";
 static char const * const PANEL_SECTION = "Panel";
+static int const POOL_LIMIT = 32;			// how many abilities the file may offer in all
 
 /*
 ** The squares are the size of a sidebar cameo, so that the icons of the game's own super
@@ -111,7 +115,7 @@ static ShapeSet const * Resolve_Cameo(char const * description, SuperWeaponType 
 			while (*name == ' ') name++;
 
 			if (stricmp(buffer, "SUPER") == 0) {
-				SuperWeaponType type = SuperPanelAbilityClass::Weapon_From_Name(name);
+				SuperWeaponType type = SuperPanelClass::Find_Weapon(SuperPanelAbilityClass::Weapon_From_Name(name));
 				if (type != SUPER_NONE) {
 					cameo = SuperWeaponTypes[type]->CameoData;
 				}
@@ -152,12 +156,58 @@ static ShapeSet const * Resolve_Cameo(char const * description, SuperWeaponType 
 
 
 /// <summary>
+/// Turns the name of a side into its value. Any house that belongs to a side may be named
+/// in its place, so that rules names such as Nod or GDI work as well.
+/// </summary>
+static SideType Side_From_Name(char const * name)
+{
+	if (name == NULL || name[0] == '\0' || stricmp(name, "any") == 0) return(SIDE_NONE);
+
+	if (stricmp(name, "GDI") == 0) return(SIDE_GDI);
+	if (stricmp(name, "NOD") == 0) return(SIDE_NOD);
+	if (stricmp(name, "Civilian") == 0) return(SIDE_CIVILIAN);
+	if (stricmp(name, "Mutant") == 0) return(SIDE_MUTANT);
+
+	HousesType type = HouseTypeClass::From_Name(name);
+	if (type != HOUSE_NONE && HouseTypes[type] != NULL) {
+		return(HouseTypes[type]->Side);
+	}
+
+	return(SIDE_NONE);
+}
+
+
+/// <summary>
+/// The name of the map being played, without folder or extension and in capitals. That is
+/// how a mission names its own ability set in SUPERPOWERS.INI.
+/// </summary>
+static void Map_Stem(char * buffer, int size)
+{
+	buffer[0] = '\0';
+	if (size < 2 || Scen == NULL || Scen->ScenarioName[0] == '\0') return;
+
+	char const * start = Scen->ScenarioName;
+	for (char const * at = Scen->ScenarioName; *at != '\0'; at++) {
+		if (*at == '\\' || *at == '/') start = at + 1;
+	}
+
+	int at = 0;
+	while (start[at] != '\0' && start[at] != '.' && at < size - 1) {
+		buffer[at] = (char)toupper((unsigned char)start[at]);
+		at++;
+	}
+	buffer[at] = '\0';
+}
+
+
+/// <summary>
 /// Creates an ability with everything switched off.
 /// </summary>
 SuperPanelAbilityClass::SuperPanelAbilityClass(void) :
 	Type(ABILITY_NONE),
 	Delivery(DELIVERY_AIR),
-	Side(-1),
+	Side(SIDE_NONE),
+	Tier(2),
 	Charge(240),
 	Count(1),
 	Tiberium(false),
@@ -167,6 +217,7 @@ SuperPanelAbilityClass::SuperPanelAbilityClass(void) :
 	Cooldown(0),
 	Charges(0)
 {
+	Section[0] = '\0';
 	Name[0] = '\0';
 	Description[0] = '\0';
 	Hint[0] = '\0';
@@ -241,6 +292,9 @@ bool SuperPanelAbilityClass::Read_INI(CCINIClass const & ini, char const * secti
 {
 	char buffer[256];
 
+	strncpy(Section, section, sizeof(Section) - 1);
+	Section[sizeof(Section) - 1] = '\0';
+
 	if (ini.Get_String(section, "Name", "", buffer, sizeof(buffer)) <= 0) {
 		return(false);
 	}
@@ -263,15 +317,17 @@ bool SuperPanelAbilityClass::Read_INI(CCINIClass const & ini, char const * secti
 
 	Charge = ini.Get_Int(section, "Charge", Charge);
 	Count = ini.Get_Int(section, "Count", Count);
+	Tier = ini.Get_Int(section, "Tier", Tier);
 	Tiberium = ini.Get_Bool(section, "Tiberium", Tiberium);
 
-	// the weapon that carries out the effect and lends its target cursor
+	// the weapon that carries out the effect, and the one whose target cursor is borrowed.
+	// The rules list their weapons in an order of their own, so a behaviour named here is
+	// looked up rather than taken for an index.
 	ini.Get_String(section, "Weapon", "", buffer, sizeof(buffer));
-	Weapon = Weapon_From_Name(buffer);
+	Weapon = SuperPanelClass::Find_Weapon(Weapon_From_Name(buffer));
 
-	// a weapon borrowed only for its target cursor, for abilities the panel carries out itself
 	ini.Get_String(section, "Cursor", "", buffer, sizeof(buffer));
-	Cursor = Weapon_From_Name(buffer);
+	Cursor = SuperPanelClass::Find_Weapon(Weapon_From_Name(buffer));
 	if (Cursor == SUPER_NONE) {
 		Cursor = Weapon;
 	}
@@ -281,11 +337,7 @@ bool SuperPanelAbilityClass::Read_INI(CCINIClass const & ini, char const * secti
 	Cameo = Resolve_Cameo(buffer, Cursor);
 
 	ini.Get_String(section, "Side", "", buffer, sizeof(buffer));
-	if (buffer[0] == '\0' || stricmp(buffer, "any") == 0) {
-		Side = -1;
-	} else {
-		Side = HouseTypeClass::From_Name(buffer);
-	}
+	Side = Side_From_Name(buffer);
 
 	return(true);
 }
@@ -360,12 +412,84 @@ void SuperPanelClass::One_Time(void)
 
 
 /// <summary>
-/// Reads the ability set out of SUPERPOWERS.INI, then lets the mission override it.
-/// The file is optional: with no file the panel simply stays hidden.
+/// Fetches the game's weapon that performs the behaviour named, or SUPER_NONE when the
+/// rules do not offer it. This game is the one that decides the order of its own weapons,
+/// so a behaviour is looked up by name rather than taken for an index.
+/// </summary>
+SuperWeaponType SuperPanelClass::Find_Weapon(SuperWeaponType behaviour)
+{
+	if (behaviour == SUPER_NONE) return(SUPER_NONE);
+
+	for (int index = SUPER_FIRST; index < SuperWeaponTypes.Count(); index++) {
+		if (SuperWeaponTypes[index] != NULL && SuperWeaponTypes[index]->Type == behaviour) {
+			return((SuperWeaponType)index);
+		}
+	}
+
+	return(SUPER_NONE);
+}
+
+
+/// <summary>
+/// The side the player is fighting for. It is what decides which abilities the panel may
+/// offer the player.
+/// </summary>
+SideType SuperPanelClass::Panel_Side(void)
+{
+	if (PlayerPtr != NULL && PlayerPtr->Class != NULL) {
+		return(PlayerPtr->Class->Side);
+	}
+
+	return(SIDE_NONE);
+}
+
+
+/// <summary>
+/// How far into its campaign the mission being played is, taken from the number in its
+/// name: GDI1A, FSNOD04 and the like. A mission without a number counts as a middling one.
+/// </summary>
+int SuperPanelClass::Mission_Tier(char const * map_name)
+{
+	int number = -1;
+
+	if (map_name != NULL) {
+		for (char const * at = map_name; *at != '\0'; at++) {
+			if (*at >= '0' && *at <= '9') {
+				number = (number < 0 ? 0 : number * 10) + (*at - '0');
+			} else if (number >= 0) {
+				break;
+			}
+		}
+	}
+
+	if (number < 0) return(2);
+	if (number <= 2) return(1);
+	if (number <= 4) return(2);
+	if (number <= 7) return(3);
+
+	return(4);
+}
+
+
+/// <summary>
+/// Reads the whole pool of abilities out of SUPERPOWERS.INI and works out which of them
+/// this mission hands to the player.
+///
+/// The pool is every section [Panel] lists. A mission takes the set its own
+/// [Mission.&lt;map&gt;] section names when the file has one, and otherwise the abilities that
+/// suit the side the player fights for and are unlocked at the stage the mission has
+/// reached. A house that belongs to a side of its own - the campaigns that other games
+/// bring along - falls back on the head of the pool, so that its panel is never empty.
+///
+/// Whatever the panel ends up with, the mission's own [SuperPowers] section may still
+/// replace or add to it.
 /// </summary>
 void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 {
+	SuperPanelAbilityClass pool[POOL_LIMIT];
 	char section[64];
+	char map[64];
+	int pool_count = 0;
 	CCINIClass ini;
 
 	SlotCount = 0;
@@ -380,23 +504,118 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 
 	TestAll = ini.Get_Bool(PANEL_SECTION, "TestAll", false);
 
-	// every entry of [Panel] names a section holding one ability
+	int slots = ini.Get_Int(PANEL_SECTION, "Slots", MAX_SLOTS);
+	if (slots < 0) slots = 0;
+	if (slots > MAX_SLOTS) slots = MAX_SLOTS;
+
+	// every entry of [Panel] names a section holding one ability of the pool
 	int entries = ini.Entry_Count(PANEL_SECTION);
-	for (int index = 0; index < entries; index++) {
+	for (int index = 0; index < entries && pool_count < POOL_LIMIT; index++) {
 		char const * entry = ini.Get_Entry(PANEL_SECTION, index);
 		if (entry == NULL) continue;
 		if (stricmp(entry, "Slots") == 0 || stricmp(entry, "TestAll") == 0) continue;
 
 		ini.Get_String(PANEL_SECTION, entry, "", section, sizeof(section));
 		if (section[0] == '\0') continue;
-		if (SlotCount >= MAX_SLOTS) break;
 
-		if (Slots[SlotCount].Read_INI(ini, section)) {
-			SlotCount++;
+		if (pool[pool_count].Read_INI(ini, section)) {
+			pool_count++;
 		}
 	}
 
-	DebugString("SuperPanel: %d abilities read (%s)\n", SlotCount, TestAll ? "test set" : "mission set");
+	Map_Stem(map, sizeof(map));
+
+	if (TestAll) {
+
+		// the test set: the head of the pool, whatever side the abilities belong to
+		for (int index = 0; index < pool_count && SlotCount < slots; index++) {
+			Slots[SlotCount++] = pool[index];
+		}
+
+	} else {
+
+		char key[96];
+		snprintf(key, sizeof(key), "Mission.%s", map);
+		bool named = false;
+
+		if (map[0] != '\0' && ini.Entry_Count(key) > 0) {
+
+			// the mission names its own set, in the order the player will see it in
+			int wanted = ini.Entry_Count(key);
+			for (int index = 0; index < wanted && SlotCount < slots; index++) {
+				char const * entry = ini.Get_Entry(key, index);
+				if (entry == NULL) continue;
+
+				ini.Get_String(key, entry, "", section, sizeof(section));
+				if (section[0] == '\0') continue;
+
+				int found = -1;
+				for (int slot = 0; slot < pool_count; slot++) {
+					if (stricmp(pool[slot].Section, section) == 0) {
+						found = slot;
+						break;
+					}
+				}
+
+				if (found >= 0) {
+					Slots[SlotCount++] = pool[found];
+					named = true;
+				} else {
+					// a section of the mission's own, written for it alone
+					SuperPanelAbilityClass ability;
+					if (ability.Read_INI(ini, section)) {
+						Slots[SlotCount++] = ability;
+						named = true;
+					}
+				}
+			}
+		}
+
+		if (!named) {
+			SideType const side = Panel_Side();
+			int const tier = Mission_Tier(map);
+			SuperPanelAbilityClass candidate[POOL_LIMIT];
+			int count = 0;
+
+			for (int index = 0; index < pool_count; index++) {
+				if (pool[index].Side != SIDE_NONE && pool[index].Side != side) continue;
+				if (pool[index].Tier > tier) continue;
+
+				int at = count++;
+				while (at > 0 && candidate[at - 1].Tier < pool[index].Tier) {
+					candidate[at] = candidate[at - 1];
+					at--;
+				}
+				candidate[at] = pool[index];
+			}
+
+			// nothing suits this side: the head of the pool still gives the player something
+			if (count == 0) {
+				for (int index = 0; index < pool_count; index++) {
+					candidate[count++] = pool[index];
+				}
+			}
+
+			// the heaviest weapons win the places, then the set is laid out lightest first
+			int const take = (count < slots) ? count : slots;
+			for (int index = take - 1; index >= 0; index--) {
+				Slots[SlotCount++] = candidate[index];
+			}
+		}
+	}
+
+	{
+		char list[512];
+		list[0] = '\0';
+
+		for (int index = 0; index < SlotCount; index++) {
+			snprintf(list + strlen(list), sizeof(list) - strlen(list),
+				"%s%s", index ? ", " : "", Slots[index].Name);
+		}
+
+		DebugString("SuperPanel: %d abilities for side %d at %s: %s\n",
+			SlotCount, (int)Panel_Side(), map, list);
+	}
 
 	// a mission may tune what it was given or add its own abilities
 	int mission_entries = mission_ini.Entry_Count("SuperPowers");
