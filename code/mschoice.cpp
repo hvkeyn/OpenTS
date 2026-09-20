@@ -234,6 +234,28 @@ MapStage * MapChoice::Find_Stage_By_Name(char const * name)
 /// stage is turned back into something the map selection screen can present.
 /// </summary>
 /// <returns>Returns with a pointer to the stage. Otherwise, NULL is returned.</returns>
+/// <summary>
+/// Fetches the stage that launches the specified scenario.
+/// A campaign may reach a map its own stage does not list, so the map is also looked for
+/// among every stage the group holds.
+/// </summary>
+/// <param name="name">Name of the scenario to search for.</param>
+/// <returns>Returns with a pointer to the stage. Otherwise, NULL is returned.</returns>
+MapStage * MapChoice::Find_Stage_By_Scenario(char const * name)
+{
+	if (name != NULL) {
+		for (int index = 0; index < Stages.Count(); index++) {
+			char const * scenario = Stages[index]->Get_Scenario_Name();
+
+			if (scenario != NULL && stricmp(scenario, name) == 0) {
+				return(Stages[index]);
+			}
+		}
+	}
+	return(NULL);
+}
+
+
 MapStage * MapChoice::Find_Stage_By_ID(unsigned short index)
 {
 	if (Stages.Count() <= index) {

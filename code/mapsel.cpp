@@ -199,6 +199,20 @@ bool MapSelect::Advance_Progression(ScenarioClass * scen, char const * map_name)
 		}
 	}
 
+	/*
+	**	A stage whose list does not name the map cannot hand the campaign on, which happens
+	**	to a campaign whose missions were added to the group after its stage was written.
+	**	The map is looked for among the stages of the whole group in that case.
+	*/
+	if (strlen(scen->ScenarioName) == 0) {
+		MapStage * found = Choices.Find_Stage_By_Scenario(map_name);
+
+		if (found != NULL) {
+			scen->Set_Scenario_Name(found->Get_Scenario_Name());
+			scen->Stage = Choices.Get_Stage_ID(found);
+		}
+	}
+
 	Choices.Deinit();
 	return(strlen(scen->ScenarioName) > 0);
 }

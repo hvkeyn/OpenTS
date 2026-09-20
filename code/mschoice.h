@@ -31,6 +31,7 @@ class MapChoice
 		void Deinit(void);
 
 		MapStage * Find_Stage_By_Name(char const * name);
+	MapStage * Find_Stage_By_Scenario(char const * name);
 		MapStage * Find_Stage_By_ID(unsigned short id);
 		short Get_Stage_ID(MapStage * stage);
 
