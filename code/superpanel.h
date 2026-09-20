@@ -106,7 +106,7 @@ class SuperPanelAbilityClass
 class SuperPanelClass
 {
 	public:
-		enum { MAX_SLOTS = 6 };
+		enum { MAX_SLOTS = 8 };
 
 		SuperPanelClass(void);
 
@@ -149,7 +149,7 @@ class SuperPanelClass
 		bool Place_Seed(Cell const & cell, int radius, char const * overlay_name);
 		bool Reveal_Area(Cell const & cell, int radius);
 		bool Barrage(Cell const & cell, int shells, int radius, int strength, char const * warhead_name);
-		bool Launch_Hunter_Seeker(void);
+		bool Launch_Hunter_Seeker(Cell const & target);
 		bool Pulse_Area(Cell const & cell, int spread, int seconds);
 		bool Damage_Area(Cell const & cell, int radius, int strength, char const * warhead_name, bool tiberium);
 
@@ -165,7 +165,7 @@ class SuperPanelClass
 		 * made again while the mission runs, because a player who takes over the enemy's own
 		 * super weapon building comes to hold powers of theirs.
 		 */
-		SuperPanelAbilityClass Pool[32];
+		SuperPanelAbilityClass Pool[48];
 		int PoolCount;
 		int SlotLimit;
 		char Stem[64];

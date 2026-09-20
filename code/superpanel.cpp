@@ -73,7 +73,7 @@ SuperPanelClass SuperPanel;
 
 static char const * const SUPERPOWERS_INI = "SUPERPOWERS.INI";
 static char const * const PANEL_SECTION = "Panel";
-static int const POOL_LIMIT = 32;			// how many abilities the file may offer in all
+static int const POOL_LIMIT = 48;			// how many abilities the file may offer in all
 
 /*
 ** The squares are the size of a sidebar cameo, so that the icons of the game's own super
@@ -1048,7 +1048,7 @@ bool SuperPanelClass::Fire_Slot(int index, Cell const & cell)
 			case SuperPanelAbilityClass::ABILITY_HUNTER_SEEKER:
 				// the drone comes in from the edge of the map and picks its own target, so the
 				// place the player aimed at is where it starts looking
-				done = Launch_Hunter_Seeker();
+				done = Launch_Hunter_Seeker(cell);
 				break;
 
 			case SuperPanelAbilityClass::ABILITY_TIBERIUM_SEED:
@@ -1137,7 +1137,42 @@ static void Drop_Pod_Dust(Cell const & cell)
 }
 
 
-static bool Land_Here(FootClass * object, Cell const & cell)
+/// <summary>
+/// Sends one aircraft in over the spot asked for.
+/// An aircraft does not stand about the way a squad does, so one that arrives is told to
+/// hunt and flagged as a loaner, which is how the game sends home an aircraft it lent to a
+/// mission.
+/// </summary>
+/// <returns>Was somewhere found for the aircraft to appear?</returns>
+static bool Fly_Here(AircraftClass * craft, Cell const & cell)
+{
+	if (craft == NULL) return(false);
+
+	craft->IsALoaner = true;
+
+	for (int radius = 0; radius <= 6; radius++) {
+		for (int y = -radius; y <= radius; y++) {
+			for (int x = -radius; x <= radius; x++) {
+				if (radius > 0 && abs(x) != radius && abs(y) != radius) continue;
+
+				Cell spot(cell.X + x, cell.Y + y);
+				if (!Map.In_Radar(spot)) continue;
+
+				if (craft->Unlimbo(Coord(spot), DIR_N)) {
+					craft->Look();
+					craft->Assign_Mission(MISSION_HUNT);
+					craft->Commence();
+					return(true);
+				}
+			}
+		}
+	}
+
+	return(false);
+}
+
+
+static bool Land_Here(FootClass * object, Cell const & cell, MissionType mission = MISSION_GUARD_AREA)
 {
 	for (int radius = 0; radius <= 5; radius++) {
 		for (int y = -radius; y <= radius; y++) {
@@ -1149,7 +1184,7 @@ static bool Land_Here(FootClass * object, Cell const & cell)
 
 				if (object->Unlimbo(Coord(spot), DIR_N)) {
 					object->Look();
-					object->Assign_Mission(MISSION_GUARD_AREA);
+					object->Assign_Mission(mission);
 					object->Commence();
 					return(true);
 				}
@@ -1184,6 +1219,8 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 		strcpy(list, "E1,E1,E2");
 	}
 
+	DebugString("SuperPanel: %s is bringing in %s\n", ability.Name, list);
+
 	char * token = strtok(list, ",");
 	while (token != NULL) {
 		while (*token == ' ' || *token == '\t') token++;
@@ -1214,6 +1251,25 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 				}
 			}
 		} else {
+			AircraftType atype = AircraftTypeClass::From_Name(token);
+
+			if (atype != AIRCRAFT_NONE && House_Owns(AircraftTypes[atype])) {
+
+				// an aircraft is flown in rather than dropped off
+				ScenarioInit++;
+				AircraftClass * craft = new AircraftClass(AircraftTypes[atype], PlayerPtr);
+				ScenarioInit--;
+
+				if (craft != NULL && Fly_Here(craft, cell)) {
+					placed++;
+				} else {
+					delete craft;
+				}
+
+				token = strtok(NULL, ",");
+				continue;
+			}
+
 			UnitType utype = UnitTypeClass::From_Name(token);
 			if (utype != UNIT_NONE && House_Owns(UnitTypes[utype])) {
 				UnitClass * unit = new UnitClass(UnitTypes[utype], PlayerPtr);
@@ -1228,6 +1284,8 @@ bool SuperPanelClass::Place_Squad(SuperPanelAbilityClass const & ability, Cell c
 				} else {
 					delete unit;
 				}
+			} else {
+				DebugString("SuperPanel: %s names nothing this game knows: %s\n", ability.Name, token);
 			}
 		}
 
@@ -1291,7 +1349,7 @@ bool SuperPanelClass::Pulse_Area(Cell const & cell, int spread, int seconds)
 /// building that normally launches it is not needed.
 /// </summary>
 /// <returns>Was a drone launched?</returns>
-bool SuperPanelClass::Launch_Hunter_Seeker(void)
+bool SuperPanelClass::Launch_Hunter_Seeker(Cell const & target)
 {
 	if (PlayerPtr == NULL) return(false);
 
@@ -1301,24 +1359,32 @@ bool SuperPanelClass::Launch_Hunter_Seeker(void)
 		return(false);
 	}
 
-	Cell entry = Map.Calculated_Cell(PlayerPtr->Control.Edge, CELL_NONE, CELL_NONE, SPEED_WINGED);
-	if (entry == CELL_NONE) {
-		entry = Map.Calculated_Cell(SOURCE_NORTH, CELL_NONE, CELL_NONE, SPEED_WINGED);
-	}
+	// the drone is sent in over the edge of the map, and failing that from where the
+	// player aimed, so that the power is never spent on an arrival that has no room
+	Cell entries[3];
+	entries[0] = Map.Calculated_Cell(PlayerPtr->Control.Edge, CELL_NONE, CELL_NONE, SPEED_WINGED);
+	entries[1] = Map.Calculated_Cell(SOURCE_NORTH, CELL_NONE, CELL_NONE, SPEED_WINGED);
+	entries[2] = target;
 
 	UnitClass * drone = new UnitClass(side->HunterSeeker, PlayerPtr);
 	if (drone == NULL) return(false);
 
-	if (!drone->Unlimbo(Coord(entry), DIR_E)) {
-		delete drone;
-		return(false);
+	for (int which = 0; which < 3; which++) {
+		if (entries[which] == CELL_NONE) continue;
+
+		if (Land_Here(drone, entries[which], MISSION_ATTACK)) {
+			drone->Locomotion->Acquire_Hunter_Seeker_Target();
+			drone->Commence();
+			DebugString("SuperPanel: hunter seeker sent in at %d,%d\n",
+				entries[which].X, entries[which].Y);
+			return(true);
+		}
 	}
 
-	drone->Locomotion->Acquire_Hunter_Seeker_Target();
-	drone->Assign_Mission(MISSION_ATTACK);
-	drone->Commence();
+	delete drone;
+	DebugString("SuperPanel: nowhere to send the hunter seeker in from\n");
 
-	return(true);
+	return(false);
 }
 
 
