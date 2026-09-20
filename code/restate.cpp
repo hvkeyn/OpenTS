@@ -41,6 +41,8 @@
 
 #include "dialog.hh"
 #include "vidscale.h"
+
+#include <cctype>
 #include "dsurface.h"
 #include "_surface.h"
 
@@ -332,17 +334,43 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 			MouseCursor->Release_Mouse();
 			Hide_Mouse();
 
-			Load_Title_Screen("SCORE.PCX", BriefingBackdrop, &CCPalette);
+			// a mission may bring a briefing picture of its own, with the text already laid
+			// into it. It is named after the map: BRF_GDI5A.PCX for GDI5A.MAP.
+			char custom[64];
+			char map[32];
+			bool has_custom = false;
+
+			{
+				char const * start = scen->ScenarioName;
+				for (char const * at = scen->ScenarioName; *at != '\0'; at++) {
+					if (*at == '\\' || *at == '/') start = at + 1;
+				}
+
+				int at = 0;
+				while (start[at] != '\0' && start[at] != '.' && at < (int)sizeof(map) - 1) {
+					map[at] = (char)toupper((unsigned char)start[at]);
+					at++;
+				}
+				map[at] = '\0';
+			}
+
+			snprintf(custom, sizeof(custom), "BRF_%s.PCX", map);
+			has_custom = CCFileClass(custom).Is_Available();
+
+			if (has_custom) {
+				DebugString("Restate: using the briefing picture %s\n", custom);
+				Load_Title_Screen(custom, BriefingBackdrop, &CCPalette);
+			} else {
+				Load_Title_Screen("SCORE.PCX", BriefingBackdrop, &CCPalette);
+			}
 			BriefingPage->Blit_From(*BriefingBackdrop);
 			Add_Update_Rect(BriefingPage->Get_Rect());
 			Present_Page();
 
-			if (strlen(BriefingText) != 0) {
-				// the block of text is as wide as the page allows: the Russian briefings run
-				// longer than the ones the screen was measured for, so every line that fits
-				// is a line the player does not have to page past
-				Rect rect(CenterX + 70, CenterY + 55, 500, 285);
-				MSPrintAnim::Word_Wrap(BriefingText, Font, rect.Width);
+			// a picture that carries the briefing has no text to type out over it
+			if (!has_custom && strlen(BriefingText) != 0) {
+				Rect rect(CenterX + 110, CenterY + 60, 420, 280);
+				MSPrintAnim::Word_Wrap(BriefingText, Font, 420);
 				Font->Get_String_Rect(BriefingText, StringRect);
 				StringRect.X = rect.X + (rect.Width - StringRect.Width) / 2;
 				StringRect.Y = rect.Y + (rect.Height - Font->Get_Font_Height() * (StringRect.Height / Font->Get_Font_Height())) / 2;
