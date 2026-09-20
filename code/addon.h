@@ -31,6 +31,10 @@ const char *Get_Addon_Title(AddonType addon);
 bool Select_Game_Type_Dialog(AddonType &type);
 void Set_Game_Type_Preset(char const * name);
 bool Get_Game_Type_Preset(AddonType & type);
+void Set_Other_Game_Directory(char const * path);
+char const * Other_Game_Directory(void);
+bool Other_Game_Available(void);
+bool Launch_Other_Game(void);
 
 AddonType operator++(AddonType & val);
 AddonType operator--(AddonType & val);

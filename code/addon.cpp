@@ -12,12 +12,21 @@
 #include "addon.h"
 
 #include "_deploymentconfig.h"
+#include "gamedirs.h"
 #include "ccfile.h"
 #include "data.h"
 #include "deploymentconfig.h"
 #include "init.h"
 #include "language/language.h"
 #include "ownrdraw.h"
+
+#include <string>
+
+/*
+ * The mutexes the startup code creates to keep a second copy of the game from running.
+ */
+extern HANDLE AppMutex;
+extern HANDLE AutoPlayMutex;
 
 INT_PTR CALLBACK Select_Game_Type_Dialog_Proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
 
@@ -150,6 +159,122 @@ INT_PTR CALLBACK Select_Game_Type_Dialog_Proc(HWND window, UINT message, WPARAM 
 	}
 
 	return(rc);
+}
+
+
+/*
+ * An installation may hold a second game beside this one, in a folder of its own. The
+ * launcher may name it outright; without that, the folder is looked for beside the data
+ * folder under the name a player is most likely to have given it.
+ */
+static std::string OtherGameDirectory;
+
+
+/// <summary>
+/// Records where the second game's data folder is.
+/// </summary>
+/// <param name="path">The folder named on the command line.</param>
+void Set_Other_Game_Directory(char const * path)
+{
+	std::string directory = path != NULL ? path : "";
+
+	if (!directory.empty() && directory.back() != '\\' && directory.back() != '/') {
+		directory += '\\';
+	}
+
+	OtherGameDirectory = directory;
+}
+
+
+/// <summary>
+/// Fetches the second game's data folder, working it out from this one when nobody named it.
+/// </summary>
+/// <returns>Returns with the folder, ending in a separator, or an empty string when there is
+/// no second game to reach.</returns>
+char const * Other_Game_Directory(void)
+{
+	static std::string resolved;
+	static bool resolved_once = false;
+
+	if (!resolved_once) {
+		resolved_once = true;
+
+		if (!OtherGameDirectory.empty()) {
+			resolved = OtherGameDirectory;
+		} else {
+			std::string const & data = Data_Directory();
+
+			if (!data.empty()) {
+				resolved = data + "..\\TwistedInsurrection\\";
+			}
+		}
+	}
+
+	return(resolved.c_str());
+}
+
+
+/// <summary>
+/// Is there a second game installed beside this one that can be started?
+/// </summary>
+/// <returns>bool; Is the other game's folder there with an executable in it?</returns>
+bool Other_Game_Available(void)
+{
+	char const * dir = Other_Game_Directory();
+
+	if (dir == NULL || dir[0] == '\0') {
+		return(false);
+	}
+
+	std::string exe = std::string(dir) + "Game.exe";
+
+	return(RawFileClass(exe.c_str()).Is_Available());
+}
+
+
+/// <summary>
+/// Starts the second game and leaves this instance to bow out.
+/// The game refuses to run twice on one machine, so the guard mutexes are let go of first.
+/// </summary>
+/// <returns>bool; Was the other game started?</returns>
+bool Launch_Other_Game(void)
+{
+	char const * dir = Other_Game_Directory();
+
+	if (dir == NULL || dir[0] == '\0') {
+		return(false);
+	}
+
+	std::string exe = std::string(dir) + "Game.exe";
+	std::string command = "\"" + exe + "\" -DATADIR=\"" + std::string(dir) + "\"";
+
+	// The mutexes that keep a second copy from running are released so that the copy
+	// started here is not turned away at the door.
+	if (AppMutex != NULL) {
+		CloseHandle(AppMutex);
+		AppMutex = NULL;
+	}
+
+	if (AutoPlayMutex != NULL) {
+		CloseHandle(AutoPlayMutex);
+		AutoPlayMutex = NULL;
+	}
+
+	STARTUPINFOA si;
+	PROCESS_INFORMATION pi;
+
+	memset(&si, 0, sizeof(si));
+	memset(&pi, 0, sizeof(pi));
+	si.cb = sizeof(si);
+
+	if (!CreateProcessA(NULL, const_cast<char *>(command.c_str()), NULL, NULL, FALSE, 0, NULL,
+		dir, &si, &pi)) {
+		return(false);
+	}
+
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+	return(true);
 }
 
 

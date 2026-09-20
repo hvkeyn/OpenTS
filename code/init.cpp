@@ -1758,6 +1758,12 @@ bool Parse_Command_Line(int argc, char * argv[])
 			continue;
 		}
 
+		// A launcher naming where the second game installed here keeps its data.
+		if (strnicmp(string, "-OTHERGAME=", strlen("-OTHERGAME=")) == 0) {
+			Set_Other_Game_Directory(&original[strlen("-OTHERGAME=")]);
+			continue;
+		}
+
 		// A client asking the game to launch what SPAWN.INI describes.
 		if (stricmp(string, "-SPAWN") == 0) {
 			Spawner_Request();

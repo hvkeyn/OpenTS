@@ -100,6 +100,30 @@ __forceinline int NewMenuClass::Game_Select_Loop(NewMenuClass * menu)
 	while (true) {
 		switch (menu->GameMode) {
 			default:
+			{
+				/*
+				**	A launcher that named the game settles the question here, so the page is
+				**	not shown and the game it named is set up in its place.
+				*/
+				AddonType preset;
+
+				if (Get_Game_Type_Preset(preset)) {
+					if (preset == ADDON_FIRESTORM) {
+						Disable_Addon(ADDON_ANY);
+						Enable_Addon(ADDON_FIRESTORM);
+						Set_Required_Addon(ADDON_FIRESTORM);
+						menu->GameMode = 1;
+					} else {
+						Disable_Addon(ADDON_ANY);
+						Set_Required_Addon(ADDON_BASE_GAME);
+						menu->GameMode = 0;
+					}
+
+					Session.Read_Scenario_Descriptions();
+					continue;
+				}
+			}
+
 				if (Addon_Installed(ADDON_FIRESTORM)) {
 					item = menu->Select_Game_Type();
 				} else {
@@ -121,6 +145,13 @@ __forceinline int NewMenuClass::Game_Select_Loop(NewMenuClass * menu)
 						continue;
 
 					case GMENU_BACK:
+						continue;
+
+					case GMENU_INSURRECTION:
+						// The other game takes over; this instance is done here.
+						if (Launch_Other_Game()) {
+							return(NSEL_EXIT);
+						}
 						continue;
 				}
 
@@ -182,6 +213,14 @@ int NewMenuClass::Process_Game_Select(void)
 int NewMenuClass::Display_Game_Select_Menu(char const * section)
 {
 	static DynamicVectorClass<int> options;
+
+	options.Clear();
+
+	// A game that is not installed beside this one is offered but cannot be chosen.
+	if (!Other_Game_Available()) {
+		options.Add(GMENU_INSURRECTION);
+	}
+
 	return(Display_Menu(section, options));
 }
 
@@ -250,6 +289,11 @@ int NewMenuClass::Select_Game_Type(void)
 				Disable_Addon(ADDON_ANY);
 				Enable_Addon(ADDON_FIRESTORM);
 				Set_Required_Addon(ADDON_FIRESTORM);
+				retry = false;
+				break;
+
+			case GMENU_INSURRECTION:
+				// Handled by the caller, which starts the other game.
 				retry = false;
 				break;
 
