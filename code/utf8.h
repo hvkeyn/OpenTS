@@ -49,4 +49,10 @@ namespace UTF8
 	int Windows_1252_Index(char32_t code);
 	int OEM_437_Glyph(char32_t code);
 	int Windows_1252_Glyph(char32_t code);
+	int Windows_1251_Glyph(char32_t code);
+	int Windows_1251_Index(char32_t code);
+	std::string To_Windows_1251(std::string_view text);
+	std::string From_Windows_1251(std::string_view text);
+	bool Looks_Cyrillic(std::string_view text);
+	int OEM_866_Glyph(char32_t code);
 }

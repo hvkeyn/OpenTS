@@ -133,14 +133,37 @@ BOOL CALLBACK InitializeCtrl(HWND window, LPARAM lparam);
 void ODDrawCharRemap(Surface & dst_surf, const char *text, int max_chars, Rect const & rect, char const *font_name, COLORREF color, char flags, int char_spacing);
 
 
-// The dialog fonts are 256-cell sheets in Windows-1252 order; a code point without a cell
-// draws as '?'.
+// The dialog fonts are 256-cell sheets. A Russian localization replaces them with sheets
+// laid out as code page 1251, so a cyrillic code point is looked up there first; the
+// Windows-1252 layout the sheets otherwise declare still answers for everything else.
+// A code point neither layout carries draws as '?'.
+/*
+ * Is the code page the system draws ANSI text in a cyrillic one? GDI goes by the system
+ * locale rather than by the UTF-8 page the game itself works in, so text handed to it has
+ * to be converted before it is drawn.
+ */
+static bool OD_System_Page_Is_Cyrillic(void)
+{
+	static int cached = -1;
+	if (cached < 0) {
+		char buffer[16] = {0};
+		int const length = GetLocaleInfoA(LOCALE_SYSTEM_DEFAULT, LOCALE_IDEFAULTANSICODEPAGE,
+			buffer, sizeof(buffer));
+		cached = (length > 0 && atoi(buffer) == 1251) ? 1 : 0;
+	}
+	return(cached == 1);
+}
+
+
 static unsigned char OD_Glyph(char32_t code)
 {
 	if (code < ' ') {
 		return((unsigned char)code);
 	}
-	int index = UTF8::Windows_1252_Glyph(code);
+	int index = UTF8::Windows_1251_Glyph(code);
+	if (index < 0) {
+		index = UTF8::Windows_1252_Glyph(code);
+	}
 	return((unsigned char)(index < 0 ? '?' : index));
 }
 
@@ -3413,6 +3436,23 @@ LRESULT CALLBACK ListBoxCtrlProc(HWND window, UINT message, WPARAM wparam, LPARA
 								} else if (cell->type == CellData::PRIMARY) {
 									SendMessage(window, LB_GETTEXT, index, (LPARAM)string);
 								}
+								/*
+								 * Localization diagnostics: report the first few list strings and the
+								 * bytes handed to GDI, so a mangled entry can be told apart from a
+								 * font that cannot draw it.
+								 */
+								{
+									static int logged = 0;
+									if (logged < 4) {
+										DebugString("OD list item %d: %s bytes:", index, string);
+for (int bi = 0; bi < (int)strlen(string) && bi < 40; bi++) {
+DebugString(" %02X", (unsigned char)string[bi]);
+}
+DebugString("%c", 10);
+logged++;
+									}
+								}
+
 								COLORREF text_color = cell->color;
 								if (text_color == -1) {
 									text_color = ODColorText;
@@ -6172,6 +6212,23 @@ int OD_Draw_Text(COLORREF color, HFONT font, Rect const & rect, const char * tex
 		}
 
 		SetTextColor(hDC, color);
+		/*
+		 * A font that declares a cyrillic code page makes GDI read the text as that
+		 * page rather than as the UTF-8 the game keeps it in, which would draw every
+		 * letter as the wrong one. Hand such a font the text in its own page.
+		 */
+		/*
+		 * GDI draws text in the code page the device expects, which on a localized system is
+		 * the system locale's own page rather than the UTF-8 the game keeps its text in. A
+		 * cyrillic page is answered by handing the text over in that page.
+		 */
+		std::string transcoded;
+		if (OD_System_Page_Is_Cyrillic()) {
+			transcoded = UTF8::To_Windows_1251(std::string_view(text, len));
+			text = transcoded.c_str();
+			len = (int)transcoded.size();
+		}
+
 		SetBkMode(hDC, TRANSPARENT);
 
 		GetTextExtentPoint32(hDC, text, len, &text_size);

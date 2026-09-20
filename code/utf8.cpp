@@ -392,3 +392,162 @@ int UTF8::Windows_1252_Glyph(char32_t code)
 	static short cache[0x10000];
 	return(Best_Fit_Index(1252, cache, code));
 }
+/// <summary>
+/// Returns the code page 1251 byte that draws code, or -1 when the code point has none.
+/// A Russian localization replaces the menu and dialog glyph sheets with ones laid out as
+/// that page and carries its text in it. Neither layout the sheets declare reaches these
+/// letters, and the best fit lookup would draw a placeholder for each of them.
+/// </summary>
+int UTF8::Windows_1251_Glyph(char32_t code)
+{
+	switch (code) {
+		case 0x0401: return(0xA8);	// capital letter IO
+		case 0x0402: return(0x80);	// capital letter DJE
+		case 0x0403: return(0x81);	// capital letter GJE
+		case 0x0404: return(0xAA);	// capital letter UKRAINIAN IE
+		case 0x0406: return(0xB2);	// capital letter BYELORUSSIAN-UKRAINIAN I
+		case 0x0407: return(0xAF);	// capital letter YI
+		case 0x0408: return(0xA3);	// capital letter JE
+		case 0x0409: return(0x8A);	// capital letter LJE
+		case 0x040A: return(0x8C);	// capital letter NJE
+		case 0x040B: return(0x8E);	// capital letter TSHE
+		case 0x040C: return(0x8D);	// capital letter KJE
+		case 0x040E: return(0xA1);	// capital letter SHORT U
+		case 0x040F: return(0x8F);	// capital letter DZHE
+		case 0x0451: return(0xB8);	// small letter io
+		case 0x0452: return(0x90);	// small letter dje
+		case 0x0453: return(0x83);	// small letter gje
+		case 0x0454: return(0xBA);	// small letter ukrainian ie
+		case 0x0456: return(0xB3);	// small letter byelorussian-ukrainian i
+		case 0x0457: return(0xBF);	// small letter yi
+		case 0x0459: return(0x9A);	// small letter lje
+		case 0x045A: return(0x9C);	// small letter nje
+		case 0x045B: return(0x9E);	// small letter tshe
+		case 0x045C: return(0x9D);	// small letter kje
+		case 0x045E: return(0xA2);	// small letter short u
+		case 0x045F: return(0x9F);	// small letter dzhe
+		case 0x0490: return(0xA5);	// capital letter GHE WITH UPTURN
+		case 0x0491: return(0xB4);	// small letter ghe with upturn
+		case 0x2116: return(0xB9);	// numero sign
+		default: break;
+	}
+
+	if (code >= 0x0410 && code <= 0x044F) {
+		return((int)(code - 0x0410) + 0xC0);
+	}
+
+	return(-1);
+}
+
+/// <summary>
+/// Returns the code page 866 byte that draws code, or -1 when the code point has none.
+/// Some Russian font tables are laid out as that page rather than as code page 1251.
+/// </summary>
+int UTF8::OEM_866_Glyph(char32_t code)
+{
+	if (code >= 0x0410 && code <= 0x043F) {
+		return((int)(code - 0x0410) + 0x80);
+	}
+	if (code >= 0x0440 && code <= 0x044F) {
+		return((int)(code - 0x0440) + 0xE0);
+	}
+	switch (code) {
+		case 0x0401: return(0xF0);	// capital letter IO
+		case 0x0451: return(0xF1);	// small letter io
+		default: break;
+	}
+	return(-1);
+}
+
+
+/// <summary>
+/// Returns the code page 1251 byte for code, or -1.
+/// </summary>
+int UTF8::Windows_1251_Index(char32_t code)
+{
+	if (code < 0x80) {
+		return((int)code);
+	}
+	return(UTF8::Windows_1251_Glyph(code));
+}
+
+/// <summary>
+/// Transcodes to Windows-1251, dropping every code point the code page lacks.
+/// </summary>
+std::string UTF8::To_Windows_1251(std::string_view text)
+{
+	std::string result;
+	result.reserve(text.size());
+
+	std::size_t offset = 0;
+	while (offset < text.size()) {
+		int length;
+		bool valid;
+		char32_t code = Decode_Sequence(text.data() + offset, text.size() - offset, length, valid);
+		offset += length;
+
+		int index = Windows_1251_Index(code);
+		if (index >= 0) {
+			result.push_back((char)index);
+		}
+	}
+	return(result);
+}
+
+/// <summary>
+/// Transcodes from Windows-1251 to UTF-8. Every byte stands for one code point, so nothing
+/// is dropped and no sequence can be malformed.
+/// </summary>
+std::string UTF8::From_Windows_1251(std::string_view text)
+{
+	/*
+	 * The half of the page above 0xC0 is where its letters live, and they run in one block,
+	 * so only the punctuation and the letters that sit outside it need a table.
+	 */
+	static char32_t const high[64] = {
+		0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021,
+		0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+		0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+		0x0098, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+		0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7,
+		0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+		0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7,
+		0x0451, 0x2116, 0x0454, 0x00BB, 0x00BC, 0x00BD, 0x00BE, 0x0457
+	};
+
+	std::string result;
+	result.reserve(text.size() + text.size() / 4);
+
+	for (unsigned char byte : text) {
+		if (byte < 0x80) {
+			result.push_back((char)byte);
+			continue;
+		}
+
+		char32_t const code = (byte >= 0xC0) ? (0x0410 + (byte - 0xC0)) : high[byte - 0x80];
+
+		char encoded[MAX_SEQUENCE];
+		result.append(encoded, Encode(code, encoded));
+	}
+	return(result);
+}
+
+
+/// <summary>
+/// Reports whether the text holds a cyrillic letter.
+/// </summary>
+bool UTF8::Looks_Cyrillic(std::string_view text)
+{
+	std::size_t offset = 0;
+	while (offset < text.size()) {
+		int length;
+		bool valid;
+		char32_t code = Decode_Sequence(text.data() + offset, text.size() - offset, length, valid);
+		offset += length;
+
+		if (code >= 0x0400 && code <= 0x04FF) {
+			return(true);
+		}
+	}
+	return(false);
+}

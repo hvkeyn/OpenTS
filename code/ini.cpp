@@ -255,9 +255,14 @@ int INIClass::Load(Straw & ffile, bool keepcomments, char const * source)
 			line.erase(0, UTF8::BOM_Length(line));
 		}
 
-		// A file written in the Windows code page keeps its accented characters.
+		/*
+		**	A localization ships its own files in its own code page, so a line that is not valid
+		**	UTF-8 is read as cyrillic first and only falls back to the western page when that
+		**	leaves it without a single cyrillic letter.
+		*/
 		if (!UTF8::Is_Valid(line)) {
-			line = UTF8::From_Windows_1252(line);
+			std::string const from_cyrillic = UTF8::From_Windows_1251(line);
+			line = UTF8::Looks_Cyrillic(from_cyrillic) ? from_cyrillic : UTF8::From_Windows_1252(line);
 			Transcoded++;
 		}
 

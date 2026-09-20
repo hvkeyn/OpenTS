@@ -257,19 +257,75 @@ int WWFontClass::Glyph_Count(void) const
 /// Westwood added the oe ligature to its code page 437 layout at 0xCE, and a slot holding
 /// the shared placeholder box at data offset 0 counts as absent.
 /// </summary>
+/// <summary>
+/// Returns the code page 1251 slot that draws code, or -1 when the code point has none.
+/// A Russian localization replaces the fonts with tables laid out as that page and carries
+/// its text in it. Neither layout the fonts themselves declare reaches these letters, and
+/// the best fit lookup would draw a placeholder for each of them.
+/// </summary>
+static int Code_Page_1251_Glyph(char32_t code)
+{
+	switch (code) {
+		case 0x0401: return(0xA8);	// capital letter IO
+		case 0x0402: return(0x80);	// capital letter DJE
+		case 0x0403: return(0x81);	// capital letter GJE
+		case 0x0404: return(0xAA);	// capital letter UKRAINIAN IE
+		case 0x0406: return(0xB2);	// capital letter BYELORUSSIAN-UKRAINIAN I
+		case 0x0407: return(0xAF);	// capital letter YI
+		case 0x0408: return(0xA3);	// capital letter JE
+		case 0x0409: return(0x8A);	// capital letter LJE
+		case 0x040A: return(0x8C);	// capital letter NJE
+		case 0x040B: return(0x8E);	// capital letter TSHE
+		case 0x040C: return(0x8D);	// capital letter KJE
+		case 0x040E: return(0xA1);	// capital letter SHORT U
+		case 0x040F: return(0x8F);	// capital letter DZHE
+		case 0x0451: return(0xB8);	// small letter io
+		case 0x0452: return(0x90);	// small letter dje
+		case 0x0453: return(0x83);	// small letter gje
+		case 0x0454: return(0xBA);	// small letter ukrainian ie
+		case 0x0456: return(0xB3);	// small letter byelorussian-ukrainian i
+		case 0x0457: return(0xBF);	// small letter yi
+		case 0x0459: return(0x9A);	// small letter lje
+		case 0x045A: return(0x9C);	// small letter nje
+		case 0x045B: return(0x9E);	// small letter tshe
+		case 0x045C: return(0x9D);	// small letter kje
+		case 0x045E: return(0xA2);	// small letter short u
+		case 0x045F: return(0x9F);	// small letter dzhe
+		case 0x0490: return(0xA5);	// capital letter GHE WITH UPTURN
+		case 0x0491: return(0xB4);	// small letter ghe with upturn
+		case 0x2116: return(0xB9);	// numero sign
+		default: break;
+	}
+
+	if (code >= 0x0410 && code <= 0x044F) {
+		return((int)(code - 0x0410) + 0xC0);
+	}
+
+	return(-1);
+}
+
+
 unsigned char WWFontClass::Glyph_Index(char32_t code) const
 {
 	if (code < ' ') {
 		return((unsigned char)code);
 	}
 
-	int index;
-	if (IsWindows1252) {
-		index = UTF8::Windows_1252_Glyph(code);
-	} else if (code == 0x0153) {
-		index = 0xCE;
-	} else {
-		index = UTF8::OEM_437_Glyph(code);
+	int index = Code_Page_1251_Glyph(code);
+
+
+	if (index < 0 || index >= Glyph_Count()) {
+		/*
+		**	The slot above is only a letter in a localization font table laid out as code page
+		**	1251, so fall back to the layout the font itself declares for everything else.
+		*/
+		if (IsWindows1252) {
+			index = UTF8::Windows_1252_Glyph(code);
+		} else if (code == 0x0153) {
+			index = 0xCE;
+		} else {
+			index = UTF8::OEM_437_Glyph(code);
+		}
 	}
 	if (index < 0 || index >= Glyph_Count()) {
 		return('?');

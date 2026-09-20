@@ -39,10 +39,19 @@ static struct {
 } Sounds[3];
 
 
-// The glyph shapes are in code page 437 order; a code point they lack draws as '?'.
+// The glyph shapes are in code page 437 order, but a Russian localization replaces the
+// font with one whose cyrillic shapes are laid out as code page 866, the page the shapes
+// were taken from when the font was drawn. A code point no page carries draws as '?'.
 int MSFont::Glyph_Frame(char32_t code) const
 {
-	int index = UTF8::OEM_437_Glyph(code);
+	int index = UTF8::OEM_866_Glyph(code);
+
+	if (index < 0) {
+		index = UTF8::Windows_1251_Glyph(code);
+	}
+	if (index < 0) {
+		index = UTF8::OEM_437_Glyph(code);
+	}
 	if (index < 0) {
 		index = '?';
 	}
