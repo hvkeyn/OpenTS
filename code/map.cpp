@@ -2342,7 +2342,6 @@ bool MapClass::Read_Binary_4(Straw & straw)
 	// block it did carry decompressed.
 	bool terminated = false;
 	Cell cell;
-
 	while (decomp.Get(&cell, sizeof(cell)) == sizeof(cell)) {
 		if (cell == CELL_NONE) {
 			terminated = true;
@@ -2382,9 +2381,11 @@ bool MapClass::Read_Binary_5(Straw & straw)
 	// A pack that runs out before its CELL_NONE terminator was cut short, even when every
 	// block it did carry decompressed.
 	bool terminated = false;
+	int cells = 0;
 	Cell cell;
 
 	while (decomp.Get(&cell, sizeof(cell)) == sizeof(cell)) {
+		cells++;
 		if (cell == CELL_NONE) {
 			terminated = true;
 			break;
@@ -2403,7 +2404,16 @@ bool MapClass::Read_Binary_5(Straw & straw)
 		}
 	}
 	new (&BlubCell) CellClass;
-	return(terminated && !decomp.Is_Damaged());
+
+	/*
+	**	A map saved by another tool may leave the CELL_NONE terminator off the end of the
+	**	pack. Such a stream still delivered everything it carried, so it is accepted when
+	**	the stream ended cleanly and the records it held cover the whole map; a stream cut
+	**	short of that is still treated as damaged.
+	*/
+	int const required = (int)PlayRect.Width * (int)PlayRect.Height;
+
+	return(!decomp.Is_Damaged() && (terminated || cells >= required));
 }
 
 
