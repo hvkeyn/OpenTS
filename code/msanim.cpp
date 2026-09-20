@@ -1262,6 +1262,19 @@ void MSPrintAnim::Set_Transient(bool transient)
 /// has been typed out and the trailing fade has run its course.
 /// </summary>
 /// <returns>bool; Is the anim done with the screen?</returns>
+/// <summary>
+/// Prints the rest of the text at once.
+/// A reader who presses a key while a page is still being typed out wants to see the whole
+/// page, not to have the page skipped.
+/// </summary>
+void MSPrintAnim::Finish(void)
+{
+	if (String != NULL) {
+		PrintedCharCount = (int)strlen(String) + 1;
+	}
+}
+
+
 bool MSPrintAnim::Has_Finished(void) const
 {
 	return(Transient && PrintedCharCount > strlen(this->String) && CompletionCount > 2);

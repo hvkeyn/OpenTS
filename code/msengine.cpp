@@ -11,6 +11,7 @@
 
 #include "msengine.h"
 
+#include "_keyboar.h"
 #include "_surface.h"
 #include "conquer.h"
 #include "dbgprint.h"
@@ -133,18 +134,28 @@ void MSEngine::Remove_Anim(MSAnim * anim)
 /// finished, or when it is no longer one the engine is running.
 /// </summary>
 /// <param name="anim">The animation to wait upon.</param>
-void MSEngine::Wait_For_Anim(MSAnim * anim, unsigned delay)
+/// <summary>
+/// Waits for an animation to finish.
+/// With the last parameter set, a key or a click while it is still running is spent on
+/// finishing it off rather than being left in the queue for whatever comes next.
+/// </summary>
+/// <param name="anim">The animation to wait for.</param>
+/// <param name="delay">How long to wait at most, in timer ticks.</param>
+/// <param name="finish_on_input">Should a key bring the animation to its end at once?</param>
+void MSEngine::Wait_For_Anim(MSAnim * anim, unsigned delay, bool finish_on_input)
 {
-	CDTimerClass<SystemTimerClass> timer = delay;
-
 	while (true) {
-		int id = Anims.ID(anim);
-		if (id == -1) {
+		if (Anims.ID(anim) == -1) {
 			break;
 		}
 
-		if (Anims[id]->Has_Finished()) {
+		if (anim->Has_Finished()) {
 			break;
+		}
+
+		if (finish_on_input && Keyboard->Check() != KN_NONE) {
+			Keyboard->Get();
+			anim->Finish();
 		}
 
 		if (delay <= 0) {

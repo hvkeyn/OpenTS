@@ -53,6 +53,12 @@ class MSAnim
 		/// Returns if the anim's done drawing itself
 		virtual bool Has_Finished(void) const { return(false); }
 
+		///
+		/// Has the animation carried out all it was going to, all at once? A page of text
+		/// that is still being typed out answers this by printing the rest of itself.
+		///
+		virtual void Finish(void) {}
+
 		/// Restores the anim's image to the surface
 		virtual void Restore(Rect const & rect) { }
 
@@ -265,6 +271,9 @@ class MSPrintAnim : public MSAnim
 
 	protected:
 		void Set_Dimensions(Rect const & rect);
+
+		/// Prints whatever is left of the text at once.
+		virtual void Finish(void) override;
 		int Get_Line_Width(char const * str) const;
 		int Get_Printed_Char_Count(void) const { return(PrintedCharCount); }
 

@@ -375,14 +375,19 @@ bool RestateMission::Presentation(ScenarioClass * scen)
 				StringRect.X = rect.X + (rect.Width - StringRect.Width) / 2;
 				StringRect.Y = rect.Y + (rect.Height - Font->Get_Font_Height() * (StringRect.Height / Font->Get_Font_Height())) / 2;
 				StringRect = Intersect(rect, StringRect);
-				MSPrintAnim::Paginate(BriefingText, Font, rect.Height);
+				// a page is as tall as the block the text is printed into, so nothing of it spills
+				// out of the block and over the buttons below
+				MSPrintAnim::Paginate(BriefingText, Font, StringRect.Height);
 
 				char * token = strtok(BriefingText, "\f");
 				if (token != NULL) {
 					while (true) {
 						MSPrintAnim * anim = new MSWordAnim(token, StringRect.X, StringRect.Y, Font, StringRect, 5);
 						Add_Animation(anim);
-						Wait_For_Anim(anim);
+
+						// a press while the page is still being typed out brings the rest of it up;
+						// the next press turns the page, or starts the mission when it is the last
+						Wait_For_Anim(anim, 300000, true);
 						String = token;
 
 						token = strtok(NULL, "\f");

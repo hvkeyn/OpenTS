@@ -29,7 +29,7 @@ class MSEngine
 		int Add_Animation(MSAnim * anim);
 		void Replace_Anim(MSAnim * new_anim, MSAnim * old_anim);
 		void Remove_Anim(MSAnim * anim);
-		void Wait_For_Anim(MSAnim * anim, unsigned delay=300000);
+		void Wait_For_Anim(MSAnim * anim, unsigned delay=300000, bool finish_on_input=false);
 		DynamicVectorClass<MSAnim *> * Get_Anims(void) { return(&Anims); }
 
 		void Restore_And_Advance(void);
