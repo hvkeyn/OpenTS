@@ -64,6 +64,7 @@ class SuperClass : public AbstractClass
 		bool Enable(bool onetime = false, bool player=false, bool quiet=false);
 		void Forced_Charge(bool player=false);
 		void Place(Cell const & cell, bool player);
+		bool Discharge_From_Panel(Cell const & cell);
 		void Drop_Pods(Cell const & cell) const;
 		void Deactivate_Firestorm(int, bool player) const;
 		bool AI(bool player=false);

@@ -772,6 +772,35 @@ void SuperClass::Place(Cell const & cell, bool player)
 /// </summary>
 /// <param name="player">Is this for a player owned super weapon? If so, then the sidebar
 /// will want redrawing.</param>
+/// <summary>
+/// Fires this weapon at the cell given on behalf of something outside the sidebar system.
+/// The super power panel keeps the charge timer of its own squares, so it hands the weapon
+/// over fully charged and takes it back afterwards. This is what lets a mission call down an
+/// ion cannon or a nuclear missile without the building that would normally grant it, and it
+/// is also what puts the target cursor away once the shot has been made.
+/// </summary>
+/// <param name="cell">Where the weapon is to be aimed.</param>
+/// <returns>Was the weapon fired?</returns>
+bool SuperClass::Discharge_From_Panel(Cell const & cell)
+{
+	bool const was_present = IsPresent;
+	bool const was_one_time = IsOneTime;
+	bool const was_ready = IsReady;
+
+	IsPresent = true;
+	IsOneTime = true;
+	IsReady = true;
+
+	Place(cell, true);
+
+	IsPresent = was_present;
+	IsOneTime = was_one_time;
+	IsReady = was_ready;
+
+	return(true);
+}
+
+
 void SuperClass::Deactivate_Firestorm(int, bool player) const
 {
 	if (Class->Type == SUPER_FIRESTORM) {

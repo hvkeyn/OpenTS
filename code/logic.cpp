@@ -65,6 +65,7 @@
 #include "rules.h"
 #include "scenario.h"
 #include "session.h"
+#include "superpanel.h"
 #include "tactical.h"
 #include "tag.h"
 #include "terrain.h"
@@ -231,6 +232,10 @@ void LogicClass::Debug_Dump(MonoClass * mono) const
 void LogicClass::AI(void)
 {
 	int index;
+
+	// the super power strip is charged from here, which is the game's own frame rate and
+	// not the rate the screen happens to be drawn at
+	SuperPanel.Logic();
 
 	FramesThisSecond++;
 

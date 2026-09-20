@@ -887,11 +887,8 @@ void DisplayClass::Cursor_Mark(Cell const &pos, bool on)
  *=============================================================================================*/
 void DisplayClass::AI(KeyNumType & input, Point2D const & xy)
 {
-	// the super power strip charges its timers once per frame. Its clicks arrive with the
-	// mouse messages of the battlefield, so a click on a square can never turn into an order
-	// for the unit standing under it.
-	SuperPanel.Logic();
-
+	// the super power strip charges from the game logic and takes its clicks from the mouse
+	// messages of the battlefield, so nothing is left for this pass to do for it
 	BASECLASS::AI(input, xy);
 }
 

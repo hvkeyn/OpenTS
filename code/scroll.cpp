@@ -649,9 +649,15 @@ void ScrollClass::Message_Handler(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 
 				POINTS pts = MAKEPOINTS(lParam);
 
-				// a click on the super power strip is spent on the ability under the cursor and
-				// never reaches the battlefield, so that no order is given by mistake
-				if (SuperPanel.Fire_At(Point2D(pts.x, pts.y))) {
+				// the super power strip takes its clicks before the battlefield does: a square
+				// starts aiming, and the click that follows picks the place the ability lands on,
+				// so that no order is given to the units standing under the cursor
+				if (SuperPanel.Click(Point2D(pts.x, pts.y))) {
+					break;
+				}
+
+				if (SuperPanel.Is_Aiming()) {
+					SuperPanel.Target(Point2D(pts.x, pts.y));
 					break;
 				}
 
@@ -685,6 +691,12 @@ void ScrollClass::Message_Handler(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 			if (IsMouseDown == false) {
 
 				POINTS pts = MAKEPOINTS(lParam);
+
+				// the right button gives up an aim the super power strip is holding
+				if (SuperPanel.Cancel()) {
+					break;
+				}
+
 				point.X = pts.x - TacticalRect.X;
 				point.Y = pts.y - TacticalRect.Y;
 
