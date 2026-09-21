@@ -602,6 +602,14 @@ class ScenarioClass {
 
 void Write_Scenario_INI(char const * root, bool mplayer=false);
 
+//
+// A map generation run: the random map generator is driven from a saved set of settings and
+// the result is written out as a scenario instead of being played. A client asks for one on
+// the command line, naming the file to write.
+//
+void GenMap_Request(char const * output);
+bool GenMap_Is_Requested(void);
+
 // Why a scenario read stopped. Scoped because success is zero, which an unscoped result would
 // let a caller test as a bool and read backwards.
 enum class ScenarioState {

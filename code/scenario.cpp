@@ -152,11 +152,13 @@
 #include "syncrechook.h"
 #include "syncreport.h"
 #include "tactical.h"
+#include "taction.h"
 #include "tag.h"
 #include "tagtype.h"
 #include "taskforc.h"
 #include "teamtype.h"
 #include "terrain.h"
+#include "tevent.h"
 #include "theme.h"
 #include "voc.h"
 #include "tiberium.h"
@@ -192,6 +194,9 @@ static Cell const Clip_Scatter(Cell const & cell, int maxdist);
 static Cell const Clip_Move(Cell const & cell, FacingType facing, int dist);
 static void Multiplayer_Last_Minute_Fixups(bool official = true);
 static char const * Pick_Load_Background_Name(Point2D & text_pos);
+static void GenMap_Add_Objectives(void);
+static void GenMap_Dress_Bases(void);
+static void GenMap_Finish(void);
 
 
 /***********************************************************************************************
@@ -648,6 +653,332 @@ static char const * Apply_Custom_Load_Screen(char const * & background, Point2D 
 
 
 /***********************************************************************************************
+ * Map generation runs -- laying a map out to be written, not played.                          *
+ *                                                                                             *
+ * A client that asks for a map to be generated wants the file, not a game: the random map      *
+ * generator is run from a saved set of settings, the map it makes is furnished with a base     *
+ * for every house that is playing, and the whole thing is written back out as a scenario.      *
+ * The process then leaves, because there was no game to play.                                  *
+ *                                                                                             *
+ * The file a run writes is named on the command line (-GENMAP=<file>) and the settings come    *
+ * from the scenario name the launch asked for, which is a saved set of generator settings.     *
+ *                                                                                             *
+ * WARNINGS:   The named file is overwritten.                                                   *
+ *=============================================================================================*/
+static char GenMapOutput[_MAX_PATH] = {0};
+
+
+void GenMap_Request(char const * output)
+{
+	if (output != NULL) {
+		std::snprintf(GenMapOutput, sizeof(GenMapOutput), "%s", output);
+	} else {
+		GenMapOutput[0] = '\0';
+	}
+}
+
+
+bool GenMap_Is_Requested(void)
+{
+	return(GenMapOutput[0] != '\0');
+}
+
+
+/// <summary>
+/// The building a role asks for, but only when the house may really own it.
+/// A role list is shared by the sides, and when the first entry belongs to the other side the
+/// house is left with no building for that role rather than being handed one it may not own.
+/// </summary>
+/// <returns>BuildingTypeClass const *; The building, or NULL when the role has none for this house.</returns>
+static BuildingTypeClass const * GenMap_Role(HouseClass * house, TypeList<BuildingTypeClass const *> const & list)
+{
+	BuildingTypeClass const * type = house->Get_Preferred(list);
+	if (type != NULL && (type->Ownable & house->Acted_Mask()) == 0) {
+		return(NULL);
+	}
+	return(type);
+}
+
+
+/// <summary>
+/// The construction yard a house builds from.
+/// The rules name one yard for both sides, so a house that may not own it is given the yard its
+/// own side is named for instead.
+/// </summary>
+/// <returns>BuildingTypeClass const *; The yard, or NULL when there is none to give.</returns>
+static BuildingTypeClass const * GenMap_Yard(HouseClass * house)
+{
+	BuildingTypeClass const * yard = GenMap_Role(house, Rule->BuildConst);
+	if (yard != NULL) {
+		return(yard);
+	}
+
+	char const * name = house->ActLike == HOUSE_BAD ? "NACNST" : "GACNST";
+	StructType type = BuildingTypeClass::From_Name(name);
+	if (type != STRUCT_NONE) {
+		return(BuildingTypes[type]);
+	}
+
+	return(NULL);
+}
+
+
+/// <summary>
+/// Looks for somewhere to put a building, walking outwards from a cell in rings.
+/// One ring is searched at a time so that a base grows outwards from the start position rather
+/// than spreading over the map.
+/// </summary>
+/// <param name="from">Cell the search starts from.</param>
+/// <param name="what">The building that is to stand there.</param>
+/// <param name="who">The house that would own it.</param>
+/// <param name="probe">Filled in with the cell found.</param>
+/// <returns>bool; Was a cell that would carry the building found?</returns>
+static bool GenMap_Find_Cell(Cell const & from, BuildingTypeClass const * what, HouseClass * who, Cell & probe)
+{
+	if (what == NULL) {
+		return(false);
+	}
+
+	for (int radius = 0; radius <= 12; radius++) {
+		for (int x = -radius; x <= radius; x++) {
+			for (int y = -radius; y <= radius; y++) {
+
+				/*
+				 * Only the ring at this radius is looked at, because the rings within it were
+				 * searched already.
+				 */
+				if (radius != 0 && std::abs(x) != radius && std::abs(y) != radius) {
+					continue;
+				}
+
+				Cell candidate(from.X + x, from.Y + y);
+				if (!Map.In_Local_Radar(candidate)) {
+					continue;
+				}
+
+				// The cell asks a question of the building's type and is given a mutable
+				// pointer for it, though nothing about the type is changed.
+				if (Map[candidate].Is_Clear_To_Build(SPEED_TRACK, const_cast<BuildingTypeClass *>(what), who)) {
+					probe = candidate;
+					return(true);
+				}
+			}
+		}
+	}
+
+	return(false);
+}
+
+
+/// <summary>
+/// Stands a building up near a cell.
+/// The nearest cell that would carry it is tried first, and when the building will not stand
+/// there the game's own scan is asked to find it room, which is what keeps a base from being
+/// left out because the ground around the start position is crowded.
+/// </summary>
+/// <returns>bool; Was the building placed?</returns>
+static bool GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * type, Cell const & from)
+{
+	// Walls are overlays rather than buildings and are no part of a base being laid out.
+	if (house == NULL || type == NULL || type->IsWall || type->ToOverlay != NULL) {
+		return(false);
+	}
+
+	BuildingClass * building = new BuildingClass(type, house);
+	if (building == NULL) {
+		return(false);
+	}
+
+	Cell probe;
+	bool placed = false;
+	if (GenMap_Find_Cell(from, type, house, probe)) {
+		placed = building->Unlimbo(probe, DIR_N) != 0;
+	}
+	if (!placed) {
+		placed = Scan_Place_Object(building, from) != 0;
+	}
+
+	if (!placed) {
+		DebugString("GenMap: %s found no ground at %d,%d\n", (char const *)type->IniName, from.X, from.Y);
+		delete building;
+		return(false);
+	}
+
+	building->IsALemon = false;
+	if (!building->IsOn && building->StunDuration == 0) {
+		building->Turn_On();
+	}
+
+	return(true);
+}
+
+
+/// <summary>
+/// Furnishes the base of one house: the power, the income, the place to build from and the
+/// radar that a house must have before it can be fought.
+/// </summary>
+/// <param name="house">The house to settle in.</param>
+static void GenMap_Dress_House(HouseClass * house)
+{
+	if (house == NULL || house->Class == NULL || house->Class->IsMultiplayPassive || house->IsObserver) {
+		return;
+	}
+
+	Cell anchor;
+	if (house->SpawnWaypoint >= 0) {
+		anchor = Scen->Get_Waypoint_Cell(house->SpawnWaypoint);
+	} else {
+		anchor = house->Center.As_Cell();
+	}
+
+	DebugString("GenMap: base of %s at %d,%d\n", (char const *)house->Class->IniName, anchor.X, anchor.Y);
+
+	/*
+	 * Income comes first, because a house with no refinery has nothing to fight with, and the
+	 * rest of the base is laid out around it.
+	 */
+	GenMap_Place_Building(house, GenMap_Yard(house), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildRefinery), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildPower), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildPower), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildBarracks), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildWeapons), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildRadar), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildDefense), anchor);
+	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildDefense), anchor);
+}
+
+
+/// <summary>
+/// Lays out the base of every house on a freshly generated map.
+/// This runs before the starting units are handed out, so that the units find their places
+/// around the bases instead of standing on top of them.
+/// </summary>
+static void GenMap_Dress_Bases(void)
+{
+	DebugString("GenMap: laying out bases\n");
+
+	/*
+	 * A base belongs at a house's start position, so which position is that house's has to be
+	 * settled first: the start positions are drawn at random when the launch did not name them.
+	 */
+	Assign_Start_Positions(true);
+
+	/*
+	 * Placement must see the map as it really is, so the scenario is no longer being
+	 * initialized while the bases go down.
+	 */
+	int save_init = ScenarioInit;
+	ScenarioInit = 0;
+
+	for (int index = 0; index < Houses.Count(); index++) {
+		GenMap_Dress_House(Houses[index]);
+	}
+
+	ScenarioInit = save_init;
+
+	GenMap_Add_Objectives();
+}
+
+
+/// <summary>
+/// Lays down one condition of the mission on a generated map.
+/// A generated map carries no mission script of its own, so each condition is a trigger of its
+/// own type, watched for a house and carried by a tag on that house.
+/// </summary>
+/// <param name="trigger">Name of the trigger type, which is also its key in the map file.</param>
+/// <param name="tag">Name of the tag type that carries the trigger.</param>
+/// <param name="watched">The house the event is judged for.</param>
+/// <param name="event">The event that springs the trigger.</param>
+/// <param name="action">The action the trigger takes.</param>
+/// <param name="subject">The house the action names.</param>
+static void GenMap_Add_Objective(char const * trigger, char const * tag, HouseClass * watched,
+	TEventType event, TActionType action, HousesType subject)
+{
+	TriggerTypeClass * type = TriggerTypeClass::Find_Or_Make(trigger);
+	type->House = watched;
+	type->IsEnabled = true;
+	type->IsEnabledOnEasy = true;
+	type->IsEnabledOnMedium = true;
+	type->IsEnabledOnHard = true;
+
+	TEventClass * tevent = new TEventClass();
+	tevent->Event = event;
+	tevent->Data.Value = 0;
+	type->FirstEvent = tevent;
+
+	TActionClass * taction = new TActionClass();
+	taction->Action = action;
+	taction->Data.House = subject;
+	type->FirstAction = taction;
+
+	TagTypeClass * tagtype = TagTypeClass::Find_Or_Make(tag);
+	tagtype->FirstTrigger = type;
+}
+
+
+/// <summary>
+/// Gives a generated map something to be won and lost by: the mission ends when the enemy has
+/// no factories left, and it is lost when the player has none.
+/// </summary>
+static void GenMap_Add_Objectives(void)
+{
+	/*
+	 * The house a player would take over is the human one; a launch that named no human seat
+	 * leaves the player to the game's own choice.
+	 */
+	HouseClass * player = NULL;
+	for (int index = 0; index < Houses.Count(); index++) {
+		HouseClass * house = Houses[index];
+		if (house != NULL && house->Class != NULL && house->IsHuman && !house->Class->IsMultiplayPassive) {
+			player = house;
+		}
+	}
+	if (player == NULL) {
+		player = PlayerPtr;
+	}
+	if (player == NULL) {
+		return;
+	}
+
+	HouseClass * enemy = NULL;
+	for (int index = 0; index < Houses.Count(); index++) {
+		HouseClass * house = Houses[index];
+		if (house == NULL || house->Class == NULL || house->Class->IsMultiplayPassive || house->IsObserver) {
+			continue;
+		}
+		if (house != player && enemy == NULL) {
+			enemy = house;
+		}
+	}
+
+	if (enemy != NULL) {
+		GenMap_Add_Objective("PRVGD_WIN", "PRVGD_WINTAG", enemy,
+			TEVENT_NOFACTORIES, TACTION_WIN, player->Class->House);
+		DebugString("GenMap: the enemy %s must be broken to win\n", (char const *)enemy->Class->IniName);
+	}
+
+	GenMap_Add_Objective("PRVGD_LOSE", "PRVGD_LOSETAG", player,
+		TEVENT_NOFACTORIES, TACTION_LOSE, player->Class->House);
+}
+
+
+/// <summary>
+/// Writes the generated map out and leaves.
+/// This is the end of a generation run: the map is on disk and there is nothing to play, so the
+/// process stops here rather than putting up a menu it was never asked for.
+/// </summary>
+static void GenMap_Finish(void)
+{
+	DebugString("GenMap: writing %s\n", GenMapOutput);
+	Write_Scenario_INI(GenMapOutput, false);
+	DebugString("GenMap: done\n");
+
+	std::exit(0);
+}
+
+
+/***********************************************************************************************
  * Read_Scenario -- Reads a scenario from disk.                                                *
  *                                                                                             *
  *    This will read a scenario from disk. Use this to begin a scenario.                       *
@@ -735,7 +1066,20 @@ bool Read_Scenario(char const * fname)
 	if (Scen->IsRandom) {
 		if (RandomMapGen.SeedData.Load(name)) {
 			RandomMapGen.Generate_Random_Map(false, NULL);
+
+			/*
+			 * A generation run wants the map rather than a game, so its bases go down before
+			 * the starting units are handed out, and the map is written out once they are.
+			 */
+			if (GenMap_Is_Requested()) {
+				GenMap_Dress_Bases();
+			}
+
 			Multiplayer_Last_Minute_Fixups();
+
+			if (GenMap_Is_Requested()) {
+				GenMap_Finish();
+			}
 		} else {
 			state = ScenarioState::NotRead;
 		}

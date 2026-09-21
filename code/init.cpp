@@ -1776,6 +1776,13 @@ bool Parse_Command_Line(int argc, char * argv[])
 			continue;
 		}
 
+		// A client asking for a random map to be laid out and written out rather than played,
+		// naming the file the map is to be written to.
+		if (strnicmp(string, "-GENMAP=", strlen("-GENMAP=")) == 0) {
+			GenMap_Request(&original[strlen("-GENMAP=")]);
+			continue;
+		}
+
 		if (memcmp(string, "-TIME=", 6) == 0) {
 			sscanf(&string[6], "%d", &TournamentTime);
 		}
