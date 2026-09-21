@@ -809,18 +809,20 @@ static INT_PTR CALLBACK Campaign_Choice_Dialog_Proc(HWND window, UINT message, W
 
 						if (state != NULL) {
 							/*
-							**	A heading has nothing to play, so choosing one leaves the dialog up.
+							**	A heading has nothing to play, so choosing one leaves the dialog up. The choice
+							**	is read from the list itself: the item the cursor happens to be over is not the
+							**	one being chosen, and a dialog has no say in which control the cursor is over.
 							*/
-							int chosen = (int)ListBox_GetItemData(item, ListBox_GetCurSel(item));
+							item = GetDlgItem(window, IDC_LIST);
+							int pos = (item != NULL) ? ListBox_GetCurSel(item) : LB_ERR;
+							int chosen = (pos != LB_ERR) ? (int)ListBox_GetItemData(item, pos) : -1;
+
 							if (chosen >= 0 && chosen < Campaigns.Count() && Campaigns[chosen]->ScenarioName[0] == '\0') {
 								break;
 							}
 
-							item = GetDlgItem(window, IDC_LIST);
-
-							if (item != NULL) {
-								int pos = ListBox_GetCurSel(item);
-								state->ChosenCampaign = (CampaignType)ListBox_GetItemData(item, pos);
+							if (chosen >= 0) {
+								state->ChosenCampaign = (CampaignType)chosen;
 								state->ChoiceMade = true;
 							}
 						}
