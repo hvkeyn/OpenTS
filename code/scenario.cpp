@@ -809,6 +809,15 @@ static bool GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * 
 		building->Turn_On();
 	}
 
+	/*
+	 * A computer house is told where its own building stands: the list of what its base is
+	 * made of is what lets it keep the base up and rebuild what it loses.
+	 */
+	if (!house->IsHuman) {
+		house->Base.House = house;
+		house->Base.Nodes.Add(BaseNodeClass(type->HeapID, building->Get_Cell()));
+	}
+
 	return(true);
 }
 
@@ -832,6 +841,15 @@ static void GenMap_Dress_House(HouseClass * house)
 	}
 
 	DebugString("GenMap: base of %s at %d,%d\n", (char const *)house->Class->IniName, anchor.X, anchor.Y);
+
+	/*
+	 * A computer house builds only if it has been given the sense to: the rules hold the
+	 * level above which a house plans and produces, and this is its highest.
+	 */
+	if (!house->IsHuman) {
+		house->IQ = Rule->MaxIQ;
+		house->Control.IQ = Rule->MaxIQ;
+	}
 
 	/*
 	 * Income comes first, because a house with no refinery has nothing to fight with, and the
