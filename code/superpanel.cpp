@@ -621,8 +621,13 @@ void SuperPanelClass::Read_INI(CCINIClass const & mission_ini)
 			SlotCount, (int)Panel_Side(), Stem, list);
 	}
 
-	// a mission may tune what it was given or add its own abilities
+	// a mission that names its own powers means exactly those: the set is thrown away
+	// and built from what the map lists. A mission may also tune the set it was given
+	// by naming a few of the pool's abilities, which replace their namesakes.
 	int mission_entries = mission_ini.Entry_Count("SuperPowers");
+	if (mission_entries > 0) {
+		SlotCount = 0;
+	}
 	for (int index = 0; index < mission_entries; index++) {
 		char const * entry = mission_ini.Get_Entry("SuperPowers", index);
 		if (entry == NULL) continue;

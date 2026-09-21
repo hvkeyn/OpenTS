@@ -725,16 +725,14 @@ void Prepare_Side_Roster(void)
 /// </summary>
 /// <param name="campaign">The campaign to be tested.</param>
 /// <returns>bool; Is the campaign available for the player to select?</returns>
-static bool Campaign_Available(CampaignClass * campaign)
+/// <summary>
+/// Is this entry of the campaign list shown to the player?
+/// A campaign that names no opening scenario is a heading: the control files use those to
+/// group the campaigns that ship with the game alongside the ones a mod adds, so headings
+/// belong in the list. They are not played: the dialog ignores one that is chosen.
+/// </summary>
+static bool Campaign_Listed(CampaignClass * campaign)
 {
-	/*
-	**	A campaign that names no opening scenario is a heading in the campaign list rather
-	**	than something to be played, which is how the control files group the campaigns
-	**	that ship with the game alongside the ones a mod adds.
-	*/
-	if (campaign->ScenarioName[0] == '\0') {
-		return(false);
-	}
 
 	if (Addon_Enabled(ADDON_ANY) == true) {
 		if (campaign->RequiredAddon == ADDON_BASE_GAME) {
@@ -781,7 +779,7 @@ static INT_PTR CALLBACK Campaign_Choice_Dialog_Proc(HWND window, UINT message, W
 				for (int index = 0; index < Campaigns.Count(); index++) {
 					CampaignClass * campaign = Campaigns[index];
 
-					if (!Campaign_Available(campaign)) {
+					if (!Campaign_Listed(campaign)) {
 						DebugString("\tSkipping Campaign [%d] - %s\n", index, campaign->Description);
 						continue;
 					}
@@ -810,6 +808,14 @@ static INT_PTR CALLBACK Campaign_Choice_Dialog_Proc(HWND window, UINT message, W
 						state = (ChooseCampaignStruct *)GetWindowLongPtr(window, DWLP_USER);
 
 						if (state != NULL) {
+							/*
+							**	A heading has nothing to play, so choosing one leaves the dialog up.
+							*/
+							int chosen = (int)ListBox_GetItemData(item, ListBox_GetCurSel(item));
+							if (chosen >= 0 && chosen < Campaigns.Count() && Campaigns[chosen]->ScenarioName[0] == '\0') {
+								break;
+							}
+
 							item = GetDlgItem(window, IDC_LIST);
 
 							if (item != NULL) {
