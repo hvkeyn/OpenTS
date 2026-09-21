@@ -194,7 +194,10 @@ static Cell const Clip_Scatter(Cell const & cell, int maxdist);
 static Cell const Clip_Move(Cell const & cell, FacingType facing, int dist);
 static void Multiplayer_Last_Minute_Fixups(bool official = true);
 static char const * Pick_Load_Background_Name(Point2D & text_pos);
-static void GenMap_Add_Objectives(void);
+static HouseClass * GenMap_Player(void);
+static HouseClass * GenMap_Enemy(HouseClass * player);
+static void GenMap_Add_Objectives(HouseClass * player, HouseClass * enemy);
+static void GenMap_Add_Mission(HouseClass * player, HouseClass * enemy, int text);
 static void GenMap_Dress_Bases(void);
 static void GenMap_Finish(void);
 
@@ -777,16 +780,16 @@ static bool GenMap_Find_Cell(Cell const & from, BuildingTypeClass const * what, 
 /// left out because the ground around the start position is crowded.
 /// </summary>
 /// <returns>bool; Was the building placed?</returns>
-static bool GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * type, Cell const & from)
+static BuildingClass * GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * type, Cell const & from)
 {
 	// Walls are overlays rather than buildings and are no part of a base being laid out.
 	if (house == NULL || type == NULL || type->IsWall || type->ToOverlay != NULL) {
-		return(false);
+		return(NULL);
 	}
 
 	BuildingClass * building = new BuildingClass(type, house);
 	if (building == NULL) {
-		return(false);
+		return(NULL);
 	}
 
 	Cell probe;
@@ -801,7 +804,7 @@ static bool GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * 
 	if (!placed) {
 		DebugString("GenMap: %s found no ground at %d,%d\n", (char const *)type->IniName, from.X, from.Y);
 		delete building;
-		return(false);
+		return(NULL);
 	}
 
 	building->IsALemon = false;
@@ -818,7 +821,50 @@ static bool GenMap_Place_Building(HouseClass * house, BuildingTypeClass const * 
 		house->Base.Nodes.Add(BaseNodeClass(type->HeapID, building->Get_Cell()));
 	}
 
-	return(true);
+	return(building);
+}
+
+
+/// <summary>
+/// The defense a house posts at its base.
+/// The rules name one for Nod alone, so a house they leave out is given the tower its own
+/// side arms, gun and all, rather than being left with nothing to hide behind.
+/// </summary>
+/// <param name="house">The house that posts it.</param>
+/// <param name="anchor">The cell the base is laid out around.</param>
+/// <param name="count">How many to post.</param>
+static void GenMap_Post_Defense(HouseClass * house, Cell const & anchor, int count)
+{
+	BuildingTypeClass const * type = GenMap_Role(house, Rule->BuildDefense);
+	StructType gun = STRUCT_NONE;
+
+	if (type == NULL) {
+		StructType tower = BuildingTypeClass::From_Name(house->ActLike == HOUSE_BAD ? "NALASR" : "GACTWR");
+		if (tower == STRUCT_NONE) {
+			DebugString("GenMap: %s has no base defense to post\n", (char const *)house->Class->IniName);
+			return;
+		}
+		type = BuildingTypes[tower];
+
+		// A component tower is a mounting until a gun is put on it.
+		if (stricmp((char const *)type->IniName, "GACTWR") == 0) {
+			gun = BuildingTypeClass::From_Name("GAVULC");
+		}
+	}
+
+	for (int index = 0; index < count; index++) {
+		BuildingClass * building = GenMap_Place_Building(house, type, anchor);
+		if (building == NULL) {
+			continue;
+		}
+
+		if (gun != STRUCT_NONE) {
+			BuildingClass * weapon = new BuildingClass(BuildingTypes[gun], house);
+			if (weapon != NULL && !weapon->Unlimbo(building->Get_Cell(), DIR_N)) {
+				delete weapon;
+			}
+		}
+	}
 }
 
 
@@ -862,8 +908,7 @@ static void GenMap_Dress_House(HouseClass * house)
 	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildBarracks), anchor);
 	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildWeapons), anchor);
 	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildRadar), anchor);
-	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildDefense), anchor);
-	GenMap_Place_Building(house, GenMap_Role(house, Rule->BuildDefense), anchor);
+	GenMap_Post_Defense(house, anchor, 2);
 }
 
 
@@ -893,16 +938,216 @@ static void GenMap_Dress_Bases(void)
 		GenMap_Dress_House(Houses[index]);
 	}
 
-	ScenarioInit = save_init;
+	HouseClass * player = GenMap_Player();
+	HouseClass * enemy = GenMap_Enemy(player);
 
-	GenMap_Add_Objectives();
+	if (player != NULL) {
+		GenMap_Add_Objectives(player, enemy);
+		GenMap_Add_Mission(player, enemy, 700);
+	}
+
+	ScenarioInit = save_init;
 }
 
 
 /// <summary>
-/// Lays down one condition of the mission on a generated map.
-/// A generated map carries no mission script of its own, so each condition is a trigger of its
-/// own type, watched for a house and carried by a tag on that house.
+/// The house a player of a generated map takes over: the human one, or whatever the game
+/// settled on when the launch named nobody.
+/// </summary>
+static HouseClass * GenMap_Player(void)
+{
+	HouseClass * player = NULL;
+
+	for (int index = 0; index < Houses.Count(); index++) {
+		HouseClass * house = Houses[index];
+		if (house != NULL && house->Class != NULL && house->IsHuman && !house->Class->IsMultiplayPassive) {
+			player = house;
+		}
+	}
+
+	if (player == NULL) {
+		player = PlayerPtr;
+	}
+
+	return(player);
+}
+
+
+/// <summary>
+/// The first house a generated map is fought against: the first one that plays and is not the
+/// player's.
+/// </summary>
+static HouseClass * GenMap_Enemy(HouseClass * player)
+{
+	for (int index = 0; index < Houses.Count(); index++) {
+		HouseClass * house = Houses[index];
+		if (house == NULL || house->Class == NULL || house->Class->IsMultiplayPassive || house->IsObserver) {
+			continue;
+		}
+		if (house != player) {
+			return(house);
+		}
+	}
+
+	return(NULL);
+}
+
+
+/// <summary>
+/// Starts a trigger type of the mission's own, ready to spring.
+/// </summary>
+/// <param name="name">Name of the trigger type, which is also its key in the map file.</param>
+/// <param name="watched">The house its event is judged for, or NULL for an event about the map
+/// as a whole such as the clock.</param>
+static TriggerTypeClass * GenMap_Trigger(char const * name, HouseClass * watched)
+{
+	TriggerTypeClass * type = TriggerTypeClass::Find_Or_Make(name);
+	type->House = watched;
+	type->IsEnabled = true;
+	type->IsEnabledOnEasy = true;
+	type->IsEnabledOnMedium = true;
+	type->IsEnabledOnHard = true;
+	return(type);
+}
+
+
+/// <summary>
+/// Gives a trigger an event, appending it to whatever the trigger carries already.
+/// </summary>
+static void GenMap_Event(TriggerTypeClass * type, TEventType event, int value)
+{
+	TEventClass * tevent = new TEventClass();
+	tevent->Event = event;
+	tevent->Data.Value = value;
+
+	if (type->FirstEvent == NULL) {
+		type->FirstEvent = tevent;
+	} else {
+		TEventClass * last = type->FirstEvent;
+		while (last->Next != NULL) {
+			last = last->Next;
+		}
+		last->Next = tevent;
+	}
+}
+
+
+/// <summary>
+/// Gives a trigger an action, appending it to whatever the trigger does already. The trigger
+/// carries out every action it holds when its event springs.
+/// </summary>
+static TActionClass * GenMap_Action(TriggerTypeClass * type, TActionType action, int value)
+{
+	TActionClass * taction = new TActionClass();
+	taction->Action = action;
+	taction->Data.Value = value;
+
+	if (type->FirstAction == NULL) {
+		type->FirstAction = taction;
+	} else {
+		TActionClass * last = type->FirstAction;
+		while (last->Next != NULL) {
+			last = last->Next;
+		}
+		last->Next = taction;
+	}
+
+	return(taction);
+}
+
+
+/// <summary>
+/// Puts text of the mission's own on screen. The line comes from the [Tutorial] section the
+/// map carries, under the number given here.
+/// </summary>
+static void GenMap_Says(TriggerTypeClass * type, int line)
+{
+	GenMap_Action(type, TACTION_TEXT_TRIGGER, line);
+}
+
+
+/// <summary>
+/// Has EVA say one of her lines.
+/// </summary>
+static void GenMap_Speak(TriggerTypeClass * type, VoxType speech)
+{
+	TActionClass * taction = GenMap_Action(type, TACTION_PLAY_SPEECH, 0);
+	taction->Data.Speech = speech;
+}
+
+
+/// <summary>
+/// Sends a team of one of the game's own types into the field, which is what a wave of an
+/// attack is made of.
+/// </summary>
+/// <returns>bool; Was the type found, so that the wave is really coming?</returns>
+static bool GenMap_Send_Team(TriggerTypeClass * type, char const * team)
+{
+	TeamTypeClass const * teamtype = TeamTypeClass::From_Name(team);
+	if (teamtype == NULL) {
+		DebugString("GenMap: no team type called %s\n", team);
+		return(false);
+	}
+
+	TActionClass * taction = GenMap_Action(type, TACTION_CREATE_TEAM, 0);
+	// The action holds the type for its own use and does not write through it.
+	taction->Team = const_cast<TeamTypeClass *>(teamtype);
+	return(true);
+}
+
+
+/// <summary>
+/// Lands a team of one of the game's own types at a waypoint, the way a mission hands the
+/// player the help it promised.
+/// </summary>
+/// <returns>bool; Was the type found, so that help is really coming?</returns>
+static bool GenMap_Land_Team(TriggerTypeClass * type, char const * team, WAYPOINT where)
+{
+	TeamTypeClass const * teamtype = TeamTypeClass::From_Name(team);
+	if (teamtype == NULL) {
+		DebugString("GenMap: no team type called %s\n", team);
+		return(false);
+	}
+
+	TActionClass * taction = GenMap_Action(type, TACTION_REINFORCEMENTS_SPECIAL, 0);
+	// The action holds the type for its own use and does not write through it.
+	taction->Team = const_cast<TeamTypeClass *>(teamtype);
+	taction->EffectLocation = where;
+	return(true);
+}
+
+
+/// <summary>
+/// Binds a trigger to a tag, so that the engine knows what carries it when the map is read
+/// back.
+/// </summary>
+static void GenMap_Tag(TriggerTypeClass * type, char const * name)
+{
+	TagTypeClass * tagtype = TagTypeClass::Find_Or_Make(name);
+	tagtype->FirstTrigger = type;
+}
+
+
+/// <summary>
+/// Binds a trigger to a tag and hangs that tag on an object, which is how an objective that
+/// names a building is kept track of.
+/// </summary>
+static void GenMap_Tag_Object(TriggerTypeClass * type, char const * name, ObjectClass * object)
+{
+	GenMap_Tag(type, name);
+
+	if (object != NULL) {
+		TagClass * tag = Find_Or_Make(TagTypeClass::From_Name(name));
+		if (tag != NULL) {
+			object->Attach_Tag(tag);
+		}
+	}
+}
+
+
+/// <summary>
+/// Lays down one condition of the mission on a generated map: what is watched, and what the
+/// mission decides when it happens.
 /// </summary>
 /// <param name="trigger">Name of the trigger type, which is also its key in the map file.</param>
 /// <param name="tag">Name of the tag type that carries the trigger.</param>
@@ -913,25 +1158,166 @@ static void GenMap_Dress_Bases(void)
 static void GenMap_Add_Objective(char const * trigger, char const * tag, HouseClass * watched,
 	TEventType event, TActionType action, HousesType subject)
 {
-	TriggerTypeClass * type = TriggerTypeClass::Find_Or_Make(trigger);
-	type->House = watched;
-	type->IsEnabled = true;
-	type->IsEnabledOnEasy = true;
-	type->IsEnabledOnMedium = true;
-	type->IsEnabledOnHard = true;
+	TriggerTypeClass * type = GenMap_Trigger(trigger, watched);
+	GenMap_Event(type, event, 0);
 
-	TEventClass * tevent = new TEventClass();
-	tevent->Event = event;
-	tevent->Data.Value = 0;
-	type->FirstEvent = tevent;
-
-	TActionClass * taction = new TActionClass();
-	taction->Action = action;
+	TActionClass * taction = GenMap_Action(type, action, 0);
 	taction->Data.House = subject;
-	type->FirstAction = taction;
 
-	TagTypeClass * tagtype = TagTypeClass::Find_Or_Make(tag);
-	tagtype->FirstTrigger = type;
+	GenMap_Tag(type, tag);
+}
+
+
+/// <summary>
+/// Stands a unit up near a cell, letting the game's own scan find it room.
+/// </summary>
+/// <returns>bool; Was the unit placed?</returns>
+static bool GenMap_Place_Unit(HouseClass * house, UnitTypeClass const * type, Cell const & from)
+{
+	if (house == NULL || type == NULL) {
+		return(false);
+	}
+
+	UnitClass * unit = new UnitClass(type, house);
+	if (unit == NULL) {
+		return(false);
+	}
+
+	bool placed = unit->Unlimbo(Coord(from), DIR_N);
+	if (!placed) {
+		placed = Scan_Place_Object(unit, from) != 0;
+	}
+
+	if (placed) {
+		unit->Assign_Mission(MISSION_GUARD);
+		if (unit->Ready_To_Commence()) {
+			unit->Commence();
+		}
+		return(true);
+	}
+
+	delete unit;
+	return(false);
+}
+
+
+/// <summary>
+/// Stands an infantryman up near a cell, letting the game's own scan find him room.
+/// </summary>
+/// <returns>bool; Was the infantryman placed?</returns>
+static bool GenMap_Place_Infantry(HouseClass * house, InfantryTypeClass const * type, Cell const & from)
+{
+	if (house == NULL || type == NULL) {
+		return(false);
+	}
+
+	InfantryClass * man = new InfantryClass(type, house);
+	if (man == NULL) {
+		return(false);
+	}
+
+	bool placed = man->Unlimbo(Coord(from), DIR_N);
+	if (!placed) {
+		placed = Scan_Place_Object(man, from) != 0;
+	}
+
+	if (placed) {
+		man->Assign_Mission(MISSION_GUARD);
+		if (man->Ready_To_Commence()) {
+			man->Commence();
+		}
+		return(true);
+	}
+
+	delete man;
+	return(false);
+}
+
+
+/// <summary>
+/// Stands a handful of units and infantry up around a cell: the guard a position is given.
+/// The units come from the game's own rules, so a guard is whatever its side fields.
+/// </summary>
+/// <param name="house">The house that owns the guard.</param>
+/// <param name="where">The cell the guard is posted around.</param>
+/// <param name="units">How many vehicles to post.</param>
+/// <param name="men">How many infantrymen to post.</param>
+static void GenMap_Post_Guard(HouseClass * house, Cell const & where, int units, int men)
+{
+	if (house == NULL || house->Class == NULL) {
+		return;
+	}
+
+	unsigned int mask = 1U << house->Class->HeapID;
+	int placed = 0;
+
+	for (int index = 0; index < UnitTypes.Count() && placed < units; index++) {
+		UnitTypeClass const * type = UnitTypes[index];
+		if (type == NULL || !type->IsAllowedToStartInMultiplayer) {
+			continue;
+		}
+		if ((type->Ownable & mask) == 0 || type->Level > house->Control.TechLevel) {
+			continue;
+		}
+		if (Rule->BaseUnit.Is_In_List(type) || Rule->HarvesterUnit.Is_In_List(type)) {
+			continue;
+		}
+		if (GenMap_Place_Unit(house, type, where)) {
+			placed++;
+		}
+	}
+
+	placed = 0;
+	for (int index = 0; index < InfantryTypes.Count() && placed < men; index++) {
+		InfantryTypeClass const * type = InfantryTypes[index];
+		if (type == NULL || !type->IsAllowedToStartInMultiplayer) {
+			continue;
+		}
+		if ((type->Ownable & mask) == 0 || type->Level > house->Control.TechLevel) {
+			continue;
+		}
+		if (GenMap_Place_Infantry(house, type, where)) {
+			placed++;
+		}
+	}
+}
+
+
+/// <summary>
+/// Lays the enemy's forward position on a generated map: the post the mission asks the player
+/// to take before the main base, planted part of the way in from the enemy's own start.
+/// </summary>
+/// <param name="player">The house the map is played by.</param>
+/// <param name="enemy">The house it is played against.</param>
+/// <param name="outpost">Receives the cell the position was planted at.</param>
+/// <returns>BuildingClass *; The refinery of the position, which is what its loss is judged by.</returns>
+static BuildingClass * GenMap_Add_Outpost(HouseClass * player, HouseClass * enemy, Cell & outpost)
+{
+	if (player == NULL || enemy == NULL) {
+		return(NULL);
+	}
+
+	Cell here = (player->SpawnWaypoint >= 0) ? Scen->Get_Waypoint_Cell(player->SpawnWaypoint) : player->Center.As_Cell();
+	Cell there = (enemy->SpawnWaypoint >= 0) ? Scen->Get_Waypoint_Cell(enemy->SpawnWaypoint) : enemy->Center.As_Cell();
+
+	/*
+	 * Three fifths of the way from the enemy's start to the player's, so that the post is
+	 * reached before the main base is and is felt from the player's own ground.
+	 */
+	outpost = Cell(there.X + (here.X - there.X) * 3 / 5, there.Y + (here.Y - there.Y) * 3 / 5);
+
+	if (!Map.In_Local_Radar(outpost)) {
+		outpost = Cell((here.X + there.X) / 2, (here.Y + there.Y) / 2);
+	}
+
+	DebugString("GenMap: forward post of %s at %d,%d\n", (char const *)enemy->Class->IniName, outpost.X, outpost.Y);
+
+	BuildingClass * refinery = GenMap_Place_Building(enemy, GenMap_Role(enemy, Rule->BuildRefinery), outpost);
+	GenMap_Place_Building(enemy, GenMap_Role(enemy, Rule->BuildPower), outpost);
+	GenMap_Post_Defense(enemy, outpost, 2);
+	GenMap_Post_Guard(enemy, outpost, 3, 4);
+
+	return(refinery);
 }
 
 
@@ -939,37 +1325,8 @@ static void GenMap_Add_Objective(char const * trigger, char const * tag, HouseCl
 /// Gives a generated map something to be won and lost by: the mission ends when the enemy has
 /// no factories left, and it is lost when the player has none.
 /// </summary>
-static void GenMap_Add_Objectives(void)
+static void GenMap_Add_Objectives(HouseClass * player, HouseClass * enemy)
 {
-	/*
-	 * The house a player would take over is the human one; a launch that named no human seat
-	 * leaves the player to the game's own choice.
-	 */
-	HouseClass * player = NULL;
-	for (int index = 0; index < Houses.Count(); index++) {
-		HouseClass * house = Houses[index];
-		if (house != NULL && house->Class != NULL && house->IsHuman && !house->Class->IsMultiplayPassive) {
-			player = house;
-		}
-	}
-	if (player == NULL) {
-		player = PlayerPtr;
-	}
-	if (player == NULL) {
-		return;
-	}
-
-	HouseClass * enemy = NULL;
-	for (int index = 0; index < Houses.Count(); index++) {
-		HouseClass * house = Houses[index];
-		if (house == NULL || house->Class == NULL || house->Class->IsMultiplayPassive || house->IsObserver) {
-			continue;
-		}
-		if (house != player && enemy == NULL) {
-			enemy = house;
-		}
-	}
-
 	if (enemy != NULL) {
 		GenMap_Add_Objective("PRVGD_WIN", "PRVGD_WINTAG", enemy,
 			TEVENT_NOFACTORIES, TACTION_WIN, player->Class->House);
@@ -978,6 +1335,109 @@ static void GenMap_Add_Objectives(void)
 
 	GenMap_Add_Objective("PRVGD_LOSE", "PRVGD_LOSETAG", player,
 		TEVENT_NOFACTORIES, TACTION_LOSE, player->Class->House);
+}
+
+
+/// <summary>
+/// The mission a generated map is played as, beyond the base each house is given.
+/// The map is asked to be a place with something to do in it: the enemy holds a forward post
+/// that is worth taking, it comes at the player in waves as the battle goes on, taking the
+/// post is answered with help from home, and the enemy's economy can be hurt on the way to
+/// its base. A map with no enemy to fight is left as a plain proving ground of the powers.
+/// </summary>
+/// <param name="player">The house the map is played by.</param>
+/// <param name="enemy">The house it is played against.</param>
+/// <param name="text">First number of the lines this map's own [Tutorial] section carries.</param>
+static void GenMap_Add_Mission(HouseClass * player, HouseClass * enemy, int text)
+{
+	if (player == NULL || enemy == NULL) {
+		return;
+	}
+
+	bool player_nod = (player->ActLike == HOUSE_BAD);
+	bool enemy_nod = (enemy->ActLike == HOUSE_BAD);
+
+	/*
+	 * A word at the start, so that the objective stands in front of the player along with the
+	 * briefing they read.
+	 */
+	{
+		TriggerTypeClass * type = GenMap_Trigger("PRVGD_OPENING", player);
+		GenMap_Event(type, TEVENT_TIME, 15);
+		GenMap_Says(type, text);
+		GenMap_Tag(type, "PRVGD_OPENINGTAG");
+	}
+
+	/*
+	 * The waves the enemy sends. Each is one of the game's own attack teams, aimed at the
+	 * player's base, and each is announced so that the attack is something the player can
+	 * brace for rather than something that happens to them.
+	 */
+	struct WaveType {
+		char const * Trigger;
+		char const * TeamNod;
+		char const * TeamGdi;
+		int Second;
+		int Line;
+	};
+	static WaveType const waves[] = {
+		{ "PRVGD_WAVE1", "073A8070-G", "07ECD3B0-G", 4 * 60, 701 },
+		{ "PRVGD_WAVE2", "07EA2AC0-G", "073A97A0-G", 8 * 60, 702 },
+		{ "PRVGD_WAVE3", "0B7D48E0-G", "0B7D4E70-G", 13 * 60, 703 },
+	};
+
+	for (int index = 0; index < ARRAY_SIZE(waves); index++) {
+		WaveType const & wave = waves[index];
+
+		TriggerTypeClass * type = GenMap_Trigger(wave.Trigger, enemy);
+		GenMap_Event(type, TEVENT_TIME, wave.Second);
+		GenMap_Says(type, text + wave.Line - 700);
+		GenMap_Send_Team(type, enemy_nod ? wave.TeamNod : wave.TeamGdi);
+		GenMap_Tag(type, wave.Trigger);
+	}
+
+	/*
+	 * The enemy's forward post. Losing it is the first thing the mission asks for, and the
+	 * answer is the help the player was promised.
+	 */
+	Cell post = CELL_NONE;
+	BuildingClass * outpost = GenMap_Add_Outpost(player, enemy, post);
+
+	if (outpost != NULL) {
+		TriggerTypeClass * type = GenMap_Trigger("PRVGD_OUTPOST", enemy);
+		GenMap_Event(type, TEVENT_DESTROYED, 0);
+		GenMap_Says(type, text + 4);
+		GenMap_Speak(type, VOX_REINFORCEMENTS);
+		GenMap_Land_Team(type, player_nod ? "07EA2AC0-G" : "073A97A0-G", 0);
+		GenMap_Tag_Object(type, "PRVGD_OUTPOSTTAG", outpost);
+	}
+
+	/*
+	 * The enemy's income, which is worth a word when it is taken away.
+	 */
+	BuildingClass * depots = NULL;
+	for (int index = 0; index < Buildings.Count(); index++) {
+		BuildingClass * building = Buildings[index];
+		if (building != NULL && !building->IsInLimbo && building->House == enemy
+			&& building->Class != NULL && Rule->BuildRefinery.Is_In_List(building->Class)) {
+			depots = building;
+			break;
+		}
+	}
+
+	if (depots != NULL) {
+		TriggerTypeClass * type = GenMap_Trigger("PRVGD_DEPOT", enemy);
+		GenMap_Event(type, TEVENT_DESTROYED, 0);
+		GenMap_Says(type, text + 5);
+		GenMap_Tag_Object(type, "PRVGD_DEPOTTAG", depots);
+	}
+
+	/*
+	 * The enemy's own guard, so that the base is not taken by walking into it. This is a
+	 * second helping on top of the units the game hands it, and it stands at the base.
+	 */
+	Cell home = (enemy->SpawnWaypoint >= 0) ? Scen->Get_Waypoint_Cell(enemy->SpawnWaypoint) : enemy->Center.As_Cell();
+	GenMap_Post_Guard(enemy, home, 4, 6);
 }
 
 

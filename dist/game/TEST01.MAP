@@ -133,6 +133,22 @@ Count=3
 
 ; --- ионный удар с орбиты ---
 
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+[Tutorial]
+700=Задание: снести передовой лагерь НОД, затем их главную базу.
+701=Предупреждение: отряд НОД идёт на вашу базу.
+702=Предупреждение: вторая волна НОД на подходе.
+703=Предупреждение: НОД бросил в бой авиацию и тяжёлую технику.
+704=Передовой лагерь НОД уничтожен. Подкрепление прибыло на базу.
+705=НПЗ НОД уничтожен: доход Братства падает.
 [SpecialFlags]
 TiberiumGrows=no
 TiberiumSpreads=yes
@@ -232,16 +248,20 @@ Allies=Nod,Special
 Color=DarkBlue
 Side=Nod
 PercentBuilt=0
-NodeCount=9
+NodeCount=13
 000=GACNST,36,57
-001=PROC,35,60
-002=NAPOWR,34,56
-003=NAPOWR,38,55
-004=NAHAND,39,57
-005=NAWEAP,40,61
-006=NARADR,36,55
-007=NAOBEL,34,58
-008=NAOBEL,33,60
+001=PROC,36,54
+002=NAPOWR,34,57
+003=NAPOWR,34,55
+004=NAHAND,36,60
+005=NAWEAP,39,57
+006=NARADR,34,59
+007=NAOBEL,32,54
+008=NAOBEL,40,55
+009=PROC,88,74
+010=NAPOWR,86,72
+011=NAOBEL,88,72
+012=NAOBEL,84,76
 
 [Neutral]
 Credits=0
@@ -1384,14 +1404,22 @@ LocalSize=2,5,66,66
 32=Neutral,CAR,256,86,71,96,Guard,None,0,-1,0,-1,1,1
 33=Neutral,BUS,256,84,73,224,Guard,None,0,-1,0,-1,1,1
 34=GDI,HARV,256,127,86,192,Harvest,None,0,-1,0,-1,1,1
-35=GDI,MMCH,256,125,87,0,Guard,None,0,-1,0,-1,1,1
-36=GDI,SMECH,256,122,87,0,Guard,None,0,-1,0,-1,1,1
-37=GDI,SMECH,256,119,87,0,Guard,None,0,-1,0,-1,1,1
-38=GDI,HVR,256,119,84,0,Guard,None,0,-1,0,-1,1,1
-39=GDI,SMECH,256,119,81,0,Guard,None,0,-1,0,-1,1,1
-40=Nod,REAPER,256,33,57,0,Area Guard,None,0,-1,0,-1,1,1
-41=Nod,REAPER,256,33,54,0,Area Guard,None,0,-1,0,-1,1,1
-42=Nod,REAPER,256,39,60,0,Area Guard,None,0,-1,0,-1,1,1
+35=Nod,BIKE,256,85,75,0,Guard,None,0,-1,0,-1,1,1
+36=Nod,TTNK,256,88,71,0,Guard,None,0,-1,0,-1,1,1
+37=Nod,BGGY,256,89,71,0,Guard,None,0,-1,0,-1,1,1
+38=Nod,BIKE,256,39,60,0,Guard,None,0,-1,0,-1,1,1
+39=Nod,TTNK,256,33,58,0,Guard,None,0,-1,0,-1,1,1
+40=Nod,BGGY,256,33,59,0,Guard,None,0,-1,0,-1,1,1
+41=Nod,REAPER,256,33,57,0,Guard,None,0,-1,0,-1,1,1
+42=GDI,JUGG,256,119,84,0,Guard,None,0,-1,0,-1,1,1
+43=GDI,MMCH,256,125,87,0,Guard,None,0,-1,0,-1,1,1
+44=GDI,JUGG,256,122,87,0,Guard,None,0,-1,0,-1,1,1
+45=GDI,JUGG,256,119,87,0,Guard,None,0,-1,0,-1,1,1
+46=Nod,BIKE,256,33,61,0,Area Guard,None,0,-1,0,-1,1,1
+47=Nod,BGGY,256,39,53,0,Area Guard,None,0,-1,0,-1,1,1
+48=Nod,TTNK,256,32,60,0,Area Guard,None,0,-1,0,-1,1,1
+49=Nod,BIKE,256,32,61,0,Area Guard,None,0,-1,0,-1,1,1
+50=Nod,BIKE,256,40,60,0,Area Guard,None,0,-1,0,-1,1,1
 
 [Infantry]
 0=Neutral,DOGGIE,256,58,86,0,Guard,0,None,0,-1,0,1,1
@@ -1404,20 +1432,22 @@ LocalSize=2,5,66,66
 7=Neutral,DOGGIE,256,46,69,0,Guard,0,None,0,-1,0,1,1
 8=Neutral,CIV2,256,85,72,0,Guard,0,None,0,-1,0,1,1
 9=Neutral,CIV3,256,85,74,0,Guard,192,None,0,-1,0,1,1
-10=GDI,E2,256,122,81,4,Guard,0,None,0,-1,0,1,1
-11=GDI,E2,256,122,81,2,Guard,0,None,0,-1,0,1,1
-12=GDI,E2,256,122,81,3,Guard,0,None,0,-1,0,1,1
-13=GDI,E2,256,125,88,4,Guard,0,None,0,-1,0,1,1
-14=GDI,E1,256,120,81,2,Guard,0,None,0,-1,0,1,1
-15=GDI,E2,256,119,83,4,Guard,0,None,0,-1,0,1,1
-16=GDI,E1,256,124,87,2,Guard,0,None,0,-1,0,1,1
-17=GDI,E1,256,122,88,2,Guard,0,None,0,-1,0,1,1
-18=GDI,E2,256,119,85,4,Guard,0,None,0,-1,0,1,1
-19=Nod,E3,256,36,54,2,Area Guard,0,None,0,-1,0,1,1
-20=Nod,E3,256,36,54,3,Area Guard,0,None,0,-1,0,1,1
-21=Nod,E3,256,36,54,4,Area Guard,0,None,0,-1,0,1,1
-22=Nod,E1,256,39,54,3,Area Guard,0,None,0,-1,0,1,1
-23=Nod,CYBORG,256,39,54,2,Area Guard,0,None,0,-1,0,1,1
+10=Nod,E1,256,85,73,3,Guard,0,None,0,-1,0,1,1
+11=Nod,E3,256,85,73,4,Guard,0,None,0,-1,0,1,1
+12=Nod,CYBORG,256,85,73,2,Guard,0,None,0,-1,0,1,1
+13=Nod,E1,256,33,56,2,Guard,0,None,0,-1,0,1,1
+14=Nod,E3,256,33,56,3,Guard,0,None,0,-1,0,1,1
+15=Nod,CYBORG,256,33,60,4,Guard,0,None,0,-1,0,1,1
+16=GDI,E1,256,122,81,2,Guard,0,None,0,-1,0,1,1
+17=GDI,E2,256,119,81,3,Guard,0,None,0,-1,0,1,1
+18=GDI,E2,256,119,81,2,Guard,0,None,0,-1,0,1,1
+19=GDI,E2,256,119,81,4,Guard,0,None,0,-1,0,1,1
+20=GDI,E2,256,122,81,4,Guard,0,None,0,-1,0,1,1
+21=GDI,E2,256,122,81,3,Guard,0,None,0,-1,0,1,1
+22=Nod,CYBORG,256,33,60,2,Area Guard,0,None,0,-1,0,1,1
+23=Nod,E1,256,33,60,3,Area Guard,0,None,0,-1,0,1,1
+24=Nod,E3,256,34,54,2,Area Guard,0,None,0,-1,0,1,1
+25=Nod,CYBORG,256,37,53,2,Area Guard,0,None,0,-1,0,1,1
 
 [Structures]
 1021908=Neutral,CABHUT,256,98,89,0,None,0,0,1,0,0,None,None,None,0,0
@@ -1436,15 +1466,21 @@ LocalSize=2,5,66,66
 1021985=GDI,GAPILE,256,120,84,0,None,1,0,1,0,0,None,None,None,0,0
 1021989=GDI,GAWEAP,256,125,81,0,None,1,0,1,0,0,None,None,None,0,0
 1021993=GDI,GARADR,256,120,82,0,None,1,0,1,0,0,None,None,None,0,0
-1021995=Nod,GACNST,256,36,57,0,None,1,0,1,0,0,None,None,None,1,0
-1021996=Nod,PROC,256,35,60,0,None,1,0,1,0,0,None,None,None,1,0
-1021997=Nod,NAPOWR,256,34,56,0,None,1,0,1,0,0,None,None,None,1,0
-1021998=Nod,NAPOWR,256,38,55,0,None,1,0,1,0,0,None,None,None,1,0
-1021999=Nod,NAHAND,256,39,57,0,None,1,0,1,0,0,None,None,None,1,0
-1022000=Nod,NAWEAP,256,40,61,0,None,1,0,1,0,0,None,None,None,1,0
-1022001=Nod,NARADR,256,36,55,0,None,1,0,1,0,0,None,None,None,1,0
-1022002=Nod,NAOBEL,256,34,58,0,None,1,0,1,0,0,None,None,None,1,0
-1022003=Nod,NAOBEL,256,33,60,0,None,1,0,1,0,0,None,None,None,1,0
+1021995=GDI,GACTWR,256,124,82,0,None,1,0,1,1,0,GAVULC,None,None,0,0
+1021999=GDI,GACTWR,256,124,83,0,None,1,0,1,1,0,GAVULC,None,None,0,0
+1022003=Nod,GACNST,256,36,57,0,None,1,0,1,0,0,None,None,None,1,0
+1022004=Nod,PROC,256,36,54,0,PRVGD_DEPOTTAG,1,0,1,0,0,None,None,None,1,0
+1022005=Nod,NAPOWR,256,34,57,0,None,1,0,1,0,0,None,None,None,1,0
+1022006=Nod,NAPOWR,256,34,55,0,None,1,0,1,0,0,None,None,None,1,0
+1022007=Nod,NAHAND,256,36,60,0,None,1,0,1,0,0,None,None,None,1,0
+1022008=Nod,NAWEAP,256,39,57,0,None,1,0,1,0,0,None,None,None,1,0
+1022009=Nod,NARADR,256,34,59,0,None,1,0,1,0,0,None,None,None,1,0
+1022010=Nod,NAOBEL,256,32,54,0,None,1,0,1,0,0,None,None,None,1,0
+1022011=Nod,NAOBEL,256,40,55,0,None,1,0,1,0,0,None,None,None,1,0
+1022012=Nod,PROC,256,88,74,0,PRVGD_OUTPOSTTAG,1,0,1,0,0,None,None,None,1,0
+1022013=Nod,NAPOWR,256,86,72,0,None,1,0,1,0,0,None,None,None,1,0
+1022014=Nod,NAOBEL,256,88,72,0,None,1,0,1,0,0,None,None,None,1,0
+1022015=Nod,NAOBEL,256,84,76,0,None,1,0,1,0,0,None,None,None,1,0
 
 [OverlayPack]
 1=DwAAIIH//lAY/4Gw/q0H/4H/gAkAACCB//7+H/+B/4CsAAAggf/+PRL/hWhs//9r/voB/4
@@ -2011,18 +2047,42 @@ LocalSize=2,5,66,66
 [Triggers]
 PRVGD_WIN=Nod,<none>,PRVGD_WIN,0,1,1,1,0
 PRVGD_LOSE=GDI,<none>,PRVGD_LOSE,0,1,1,1,0
+PRVGD_OPENING=GDI,<none>,PRVGD_OPENING,0,1,1,1,0
+PRVGD_WAVE1=Nod,<none>,PRVGD_WAVE1,0,1,1,1,0
+PRVGD_WAVE2=Nod,<none>,PRVGD_WAVE2,0,1,1,1,0
+PRVGD_WAVE3=Nod,<none>,PRVGD_WAVE3,0,1,1,1,0
+PRVGD_OUTPOST=Nod,<none>,PRVGD_OUTPOST,0,1,1,1,0
+PRVGD_DEPOT=Nod,<none>,PRVGD_DEPOT,0,1,1,1,0
 
 [Events]
 PRVGD_WIN=1,17,0,0
 PRVGD_LOSE=1,17,0,0
+PRVGD_OPENING=1,13,0,15
+PRVGD_WAVE1=1,13,0,240
+PRVGD_WAVE2=1,13,0,480
+PRVGD_WAVE3=1,13,0,780
+PRVGD_OUTPOST=1,7,0,0
+PRVGD_DEPOT=1,7,0,0
 
 [Actions]
 PRVGD_WIN=1,1,0,0,0,0,0,0,A
 PRVGD_LOSE=1,2,0,0,0,0,0,0,A
+PRVGD_OPENING=1,11,0,700,0,0,0,0,A
+PRVGD_WAVE1=2,11,0,701,0,0,0,0,A,4,1,073A8070-G,0,0,0,0,A
+PRVGD_WAVE2=2,11,0,702,0,0,0,0,A,4,1,07EA2AC0-G,0,0,0,0,A
+PRVGD_WAVE3=2,11,0,703,0,0,0,0,A,4,1,0B7D48E0-G,0,0,0,0,A
+PRVGD_OUTPOST=3,11,0,704,0,0,0,0,A,21,0,10,0,0,0,0,A,80,1,073A97A0-G,0,0,0,0,A
+PRVGD_DEPOT=1,11,0,705,0,0,0,0,A
 
 [Tags]
 PRVGD_WINTAG=0,PRVGD_WINTAG,PRVGD_WIN
 PRVGD_LOSETAG=0,PRVGD_LOSETAG,PRVGD_LOSE
+PRVGD_OPENINGTAG=0,PRVGD_OPENINGTAG,PRVGD_OPENING
+PRVGD_WAVE1=0,PRVGD_WAVE1,PRVGD_WAVE1
+PRVGD_WAVE2=0,PRVGD_WAVE2,PRVGD_WAVE2
+PRVGD_WAVE3=0,PRVGD_WAVE3,PRVGD_WAVE3
+PRVGD_OUTPOSTTAG=0,PRVGD_OUTPOSTTAG,PRVGD_OUTPOST
+PRVGD_DEPOTTAG=0,PRVGD_DEPOTTAG,PRVGD_DEPOT
 
 [Digest]
-1=IvDOOn3dBBg/gMC+rPn0WaovaxM=
+1=bpESnDnnNeD5+RdA67yfbipFtq4=

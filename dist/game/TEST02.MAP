@@ -126,6 +126,22 @@ Count=2
 
 ; --- посев тиберия ---
 
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+
+; Тексты миссии, которые показывают триггеры карты.
+[Tutorial]
+700=Задание: уничтожить передовой лагерь ГСБ, затем их базу.
+701=ГСБ прощупывает оборону: идёт первая волна.
+702=Вторая волна ГСБ на подходе.
+703=ГСБ ввёл в бой авиацию и тяжёлую технику.
+704=Лагерь ГСБ уничтожен. Братство прислало подкрепление.
+705=НПЗ ГСБ уничтожен: снабжение ГСБ ослаблено.
 [SpecialFlags]
 TiberiumGrows=no
 TiberiumSpreads=yes
@@ -225,7 +241,7 @@ Allies=GDI,Special
 Color=DarkBlue
 Side=GDI
 PercentBuilt=0
-NodeCount=7
+NodeCount=13
 000=GACNST,115,61
 001=PROC,114,58
 002=GAPOWR,113,63
@@ -233,6 +249,12 @@ NodeCount=7
 004=GAPILE,118,59
 005=GAWEAP,118,63
 006=GARADR,118,61
+007=GACTWR,113,59
+008=GACTWR,113,60
+009=PROC,59,67
+010=GAPOWR,55,69
+011=GACTWR,56,68
+012=GACTWR,57,68
 
 [Neutral]
 Credits=0
@@ -1392,14 +1414,21 @@ LocalSize=2,5,66,66
 23=Neutral,BUS,64,58,120,224,Guard,None,0,-1,0,-1,1,1
 24=Neutral,BUS,128,107,104,0,Guard,None,0,-1,0,-1,1,1
 25=Nod,HARV,256,23,76,192,Harvest,None,0,-1,0,-1,1,1
-26=Nod,BGGY,256,15,75,0,Guard,None,0,-1,0,-1,1,1
-27=Nod,REAPER,256,15,72,0,Guard,None,0,-1,0,-1,1,1
-28=Nod,TTNK,256,18,72,0,Guard,None,0,-1,0,-1,1,1
-29=Nod,REAPER,256,14,73,0,Guard,None,0,-1,0,-1,1,1
-30=GDI,JUGG,256,115,64,0,Area Guard,None,0,-1,0,-1,1,1
-31=GDI,MMCH,256,112,64,0,Area Guard,None,0,-1,0,-1,1,1
-32=GDI,HVR,256,112,61,0,Area Guard,None,0,-1,0,-1,1,1
-33=GDI,HVR,256,112,58,0,Area Guard,None,0,-1,0,-1,1,1
+26=GDI,MMCH,256,57,69,0,Guard,None,0,-1,0,-1,1,1
+27=GDI,SMECH,256,58,68,0,Guard,None,0,-1,0,-1,1,1
+28=GDI,HVR,256,58,70,0,Guard,None,0,-1,0,-1,1,1
+29=GDI,MMCH,256,112,61,0,Guard,None,0,-1,0,-1,1,1
+30=GDI,SMECH,256,115,64,0,Guard,None,0,-1,0,-1,1,1
+31=GDI,HVR,256,113,58,0,Guard,None,0,-1,0,-1,1,1
+32=GDI,JUGG,256,112,58,0,Guard,None,0,-1,0,-1,1,1
+33=Nod,TTNK,256,18,72,0,Guard,None,0,-1,0,-1,1,1
+34=Nod,BGGY,256,15,75,0,Guard,None,0,-1,0,-1,1,1
+35=Nod,TTNK,256,15,72,0,Guard,None,0,-1,0,-1,1,1
+36=Nod,REAPER,256,19,71,0,Guard,None,0,-1,0,-1,1,1
+37=GDI,JUGG,256,118,58,0,Area Guard,None,0,-1,0,-1,1,1
+38=GDI,HVR,256,116,64,0,Area Guard,None,0,-1,0,-1,1,1
+39=GDI,MMCH,256,119,58,0,Area Guard,None,0,-1,0,-1,1,1
+40=GDI,MMCH,256,117,65,0,Area Guard,None,0,-1,0,-1,1,1
 
 [Infantry]
 0=Neutral,DOGGIE,256,62,32,0,Guard,0,None,0,-1,0,1,1
@@ -1411,16 +1440,22 @@ LocalSize=2,5,66,66
 6=Neutral,DOGGIE,256,37,62,0,Guard,0,None,0,-1,0,1,1
 7=Neutral,DOGGIE,256,34,88,0,Guard,0,None,0,-1,0,1,1
 8=Neutral,DOGGIE,256,41,89,0,Guard,0,None,0,-1,0,1,1
-9=Nod,E3,256,14,77,2,Guard,0,None,0,-1,0,1,1
-10=Nod,E3,256,14,75,2,Guard,0,None,0,-1,0,1,1
-11=Nod,CYBORG,256,14,76,2,Guard,0,None,0,-1,0,1,1
-12=GDI,E2,256,118,58,4,Area Guard,0,None,0,-1,0,1,1
-13=GDI,E1,256,118,58,3,Area Guard,0,None,0,-1,0,1,1
-14=GDI,E1,256,118,58,2,Area Guard,0,None,0,-1,0,1,1
-15=GDI,E2,256,112,65,3,Area Guard,0,None,0,-1,0,1,1
-16=GDI,E2,256,112,57,4,Area Guard,0,None,0,-1,0,1,1
-17=GDI,E1,256,116,64,4,Area Guard,0,None,0,-1,0,1,1
-18=GDI,E2,256,111,64,2,Area Guard,0,None,0,-1,0,1,1
+9=GDI,E1,256,57,70,2,Guard,0,None,0,-1,0,1,1
+10=GDI,E2,256,58,69,3,Guard,0,None,0,-1,0,1,1
+11=GDI,E1,256,112,64,3,Guard,0,None,0,-1,0,1,1
+12=GDI,E2,256,117,64,3,Guard,0,None,0,-1,0,1,1
+13=Nod,E3,256,15,74,4,Guard,0,None,0,-1,0,1,1
+14=Nod,CYBORG,256,14,79,4,Guard,0,None,0,-1,0,1,1
+15=Nod,E3,256,15,74,3,Guard,0,None,0,-1,0,1,1
+16=Nod,E1,256,14,72,2,Guard,0,None,0,-1,0,1,1
+17=Nod,E3,256,20,74,2,Guard,0,None,0,-1,0,1,1
+18=GDI,E1,256,112,64,4,Area Guard,0,None,0,-1,0,1,1
+19=GDI,E2,256,112,64,2,Area Guard,0,None,0,-1,0,1,1
+20=GDI,E2,256,112,63,3,Area Guard,0,None,0,-1,0,1,1
+21=GDI,E1,256,115,65,3,Area Guard,0,None,0,-1,0,1,1
+22=GDI,E1,256,112,63,2,Area Guard,0,None,0,-1,0,1,1
+23=GDI,E2,256,112,60,3,Area Guard,0,None,0,-1,0,1,1
+24=GDI,E2,256,111,62,2,Area Guard,0,None,0,-1,0,1,1
 
 [Structures]
 1021944=Neutral,CAHOSP,256,62,124,0,None,1,0,1,0,0,None,None,None,0,0
@@ -1436,12 +1471,18 @@ LocalSize=2,5,66,66
 1021972=Nod,NAOBEL,256,20,72,0,None,1,0,1,0,0,None,None,None,0,0
 1021975=Nod,NAOBEL,256,18,78,0,None,1,0,1,0,0,None,None,None,0,0
 1021978=GDI,GACNST,256,115,61,0,None,1,0,1,0,0,None,None,None,1,0
-1021979=GDI,PROC,256,114,58,0,None,1,0,1,0,0,None,None,None,1,0
+1021979=GDI,PROC,256,114,58,0,PRVGD_DEPOTTAG,1,0,1,0,0,None,None,None,1,0
 1021980=GDI,GAPOWR,256,113,63,0,None,1,0,1,0,0,None,None,None,1,0
 1021981=GDI,GAPOWR,256,113,61,0,None,1,0,1,0,0,None,None,None,1,0
 1021982=GDI,GAPILE,256,118,59,0,None,1,0,1,0,0,None,None,None,1,0
 1021983=GDI,GAWEAP,256,118,63,0,None,1,0,1,0,0,None,None,None,1,0
 1021984=GDI,GARADR,256,118,61,0,None,1,0,1,0,0,None,None,None,1,0
+1021985=GDI,GACTWR,256,113,59,0,None,1,0,1,1,0,GAVULC,None,None,1,0
+1021988=GDI,GACTWR,256,113,60,0,None,1,0,1,1,0,GAVULC,None,None,1,0
+1021991=GDI,PROC,256,59,67,0,PRVGD_OUTPOSTTAG,1,0,1,0,0,None,None,None,1,0
+1021992=GDI,GAPOWR,256,55,69,0,None,1,0,1,0,0,None,None,None,1,0
+1021993=GDI,GACTWR,256,56,68,0,None,1,0,1,1,0,GAVULC,None,None,1,0
+1021996=GDI,GACTWR,256,57,68,0,None,1,0,1,1,0,GAVULC,None,None,1,0
 
 [OverlayPack]
 1=DwAAIIH//kIc/4Gx/rsD/4H/gFAAACCB//5KAv+Bqf74Ef+Bb/7/Af+Dbm9m/voB/4dpbW
@@ -2012,18 +2053,42 @@ LocalSize=2,5,66,66
 [Triggers]
 PRVGD_WIN=GDI,<none>,PRVGD_WIN,0,1,1,1,0
 PRVGD_LOSE=Nod,<none>,PRVGD_LOSE,0,1,1,1,0
+PRVGD_OPENING=Nod,<none>,PRVGD_OPENING,0,1,1,1,0
+PRVGD_WAVE1=GDI,<none>,PRVGD_WAVE1,0,1,1,1,0
+PRVGD_WAVE2=GDI,<none>,PRVGD_WAVE2,0,1,1,1,0
+PRVGD_WAVE3=GDI,<none>,PRVGD_WAVE3,0,1,1,1,0
+PRVGD_OUTPOST=GDI,<none>,PRVGD_OUTPOST,0,1,1,1,0
+PRVGD_DEPOT=GDI,<none>,PRVGD_DEPOT,0,1,1,1,0
 
 [Events]
 PRVGD_WIN=1,17,0,0
 PRVGD_LOSE=1,17,0,0
+PRVGD_OPENING=1,13,0,15
+PRVGD_WAVE1=1,13,0,240
+PRVGD_WAVE2=1,13,0,480
+PRVGD_WAVE3=1,13,0,780
+PRVGD_OUTPOST=1,7,0,0
+PRVGD_DEPOT=1,7,0,0
 
 [Actions]
 PRVGD_WIN=1,1,0,1,0,0,0,0,A
 PRVGD_LOSE=1,2,0,1,0,0,0,0,A
+PRVGD_OPENING=1,11,0,700,0,0,0,0,A
+PRVGD_WAVE1=2,11,0,701,0,0,0,0,A,4,1,07ECD3B0-G,0,0,0,0,A
+PRVGD_WAVE2=2,11,0,702,0,0,0,0,A,4,1,073A97A0-G,0,0,0,0,A
+PRVGD_WAVE3=2,11,0,703,0,0,0,0,A,4,1,0B7D4E70-G,0,0,0,0,A
+PRVGD_OUTPOST=3,11,0,704,0,0,0,0,A,21,0,10,0,0,0,0,A,80,1,07EA2AC0-G,0,0,0,0,A
+PRVGD_DEPOT=1,11,0,705,0,0,0,0,A
 
 [Tags]
 PRVGD_WINTAG=0,PRVGD_WINTAG,PRVGD_WIN
 PRVGD_LOSETAG=0,PRVGD_LOSETAG,PRVGD_LOSE
+PRVGD_OPENINGTAG=0,PRVGD_OPENINGTAG,PRVGD_OPENING
+PRVGD_WAVE1=0,PRVGD_WAVE1,PRVGD_WAVE1
+PRVGD_WAVE2=0,PRVGD_WAVE2,PRVGD_WAVE2
+PRVGD_WAVE3=0,PRVGD_WAVE3,PRVGD_WAVE3
+PRVGD_OUTPOSTTAG=0,PRVGD_OUTPOSTTAG,PRVGD_OUTPOST
+PRVGD_DEPOTTAG=0,PRVGD_DEPOTTAG,PRVGD_DEPOT
 
 [Digest]
-1=uuEHhgQcJ7mT6GVHugAsOhhrTCw=
+1=49/objJBrgEMISzU4/lPsQLRfhM=
