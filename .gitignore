@@ -10,6 +10,10 @@
 *.res
 *.ilk
 *.map
+
+# build/ is where the compiler puts a map; dist/ is where the build's own maps are kept.
+!dist/**/*.map
+!dist/**/*.MAP
 *.exp
 
 # MSVC intermediate files
