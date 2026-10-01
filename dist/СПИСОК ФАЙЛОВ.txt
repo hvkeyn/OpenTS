@@ -1,0 +1,54 @@
+C&C: Tiberian Sun + Firestorm + Twisted Insurrection, русская сборка OpenTS
+
+Контрольные суммы важных файлов.
+Проверить сборку целиком можно файлом ПРОВЕРКА.cmd.
+
+TiberianSun\Game.exe                         7392256 байт  md5 7826b39d4a09c1634478482d26020237
+                                           движок
+TwistedInsurrection\Game.exe                 7392256 байт  md5 7826b39d4a09c1634478482d26020237
+                                           движок TI
+TiberianSun\Language.dll                      116736 байт  md5 fa1836533f7b94b774d1e06647273cfd
+                                           русские строки
+TwistedInsurrection\Language.dll              116736 байт  md5 fa1836533f7b94b774d1e06647273cfd
+                                           русские строки TI
+TiberianSun\8point.fnt                         12097 байт  md5 c3374ab16337268947c10bf7d3231795
+                                           шрифт с кириллицей
+TiberianSun\12metfnt.fnt                       15727 байт  md5 0ab703e33da13fd39ecce1ed7a2c0109
+                                           шрифт с кириллицей
+TiberianSun\6point.fnt                         12644 байт  md5 4bf8d60f15efa6a50f45bfe991169701
+                                           шрифт с кириллицей
+TiberianSun\fullfnt3.shp                       71209 байт  md5 49bd003f973c94dfebc29da0977ae1b9
+                                           русские буквы брифингов
+TiberianSun\fullfnt3.pal                         768 байт  md5 bddf4510db9efefe7c6bf418d048d2ef
+                                           палитра букв
+TiberianSun\INI\Battle.ini                      6711 байт  md5 515737f4a6c7f0ea49dc056de70da7d2
+                                           список кампаний
+TiberianSun\INI\LANGFS.INI                     20528 байт  md5 32e5b86e3003797f19984743da81b82e
+                                           строки Firestorm
+TiberianSun\MISSION1.INI                       25883 байт  md5 bb1ccea7dc89f70469254b4b61875eb8
+                                           брифинги миссий
+TiberianSun\MISSION.INI                       215814 байт  md5 44d42b9b9a3c5a51b6d5f2e13c84c1dd
+                                           брифинги кампаний
+TiberianSun\SUPERPOWERS.INI                     8949 байт  md5 1413ade97cbd7241929fd4fba2ea2185
+                                           панель суперсил
+TiberianSun\SUN.INI                              914 байт  md5 fce1dcf4f44685a8672280ebb0ee96de
+                                           разрешение и скорость
+TiberianSun\TEST01.MAP                        105040 байт  md5 a4dfcd42be6d13669a84dbd293b7c177
+                                           полигон 1
+TiberianSun\TEST02.MAP                        106270 байт  md5 b1c76b400006adf92bc4344ae250aa08
+                                           полигон 2
+TiberianSun\TEST03.MAP                        105932 байт  md5 4a2866eb329e1668406fc51aefd617d1
+                                           полигон 3
+TwistedInsurrection\INI\Battle.ini              7396 байт  md5 ebd9bae33be9f8d2f1cbca32f987e207
+                                           список кампаний TI
+TwistedInsurrection\SUPERPOWERS.INI             8949 байт  md5 1413ade97cbd7241929fd4fba2ea2185
+                                           панель суперсил TI
+TwistedInsurrection\8point.fnt                 12097 байт  md5 c3374ab16337268947c10bf7d3231795
+                                           шрифт с кириллицей TI
+
+Движок во всех трёх играх один и тот же файл:
+   TiberianSun\Game.exe и TwistedInsurrection\Game.exe должны быть одного размера.
+
+Если хеш движка не совпадает, запускается чужая сборка: старая установка игры,
+антивирус подменил файл или архив распакован не полностью. Тогда русский текст
+в списках кампаний идёт мусором, а миссии падают.
