@@ -62,9 +62,11 @@ function Update-Checks([string]$Root, [long]$Size, [string]$Hash) {
 }
 
 # The package once carried these names; a build updated in place would end up
-# with both the old and the new file. Drop the old ones.
+# with both the old and the new file. Only the names that differ by more than
+# case are dropped: on Windows the old and the new spelling of a .cmd name is
+# the same file, so removing it would remove the new one too.
 function Remove-Legacy([string]$Root) {
-    foreach ($name in @('Проверка.cmd', 'Список_файлов.txt', 'Обновить.cmd', 'Как_играть.txt')) {
+    foreach ($name in @('СПИСОК ФАЙЛОВ.txt', 'КАК ИГРАТЬ.txt')) {
         $path = Join-Path $Root $name
         if (Test-Path $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
     }
