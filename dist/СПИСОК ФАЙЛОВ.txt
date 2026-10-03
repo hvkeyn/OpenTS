@@ -3,9 +3,9 @@ C&C: Tiberian Sun + Firestorm + Twisted Insurrection, русская сборк�
 Контрольные суммы важных файлов.
 Проверить сборку целиком можно файлом ПРОВЕРКА.cmd.
 
-TiberianSun\Game.exe                         7392256 байт  md5 7826b39d4a09c1634478482d26020237
+TiberianSun\Game.exe                         7394304 байт  md5 b8767d9beaabc764e2882719df65330b
                                            движок
-TwistedInsurrection\Game.exe                 7392256 байт  md5 7826b39d4a09c1634478482d26020237
+TwistedInsurrection\Game.exe                 7394304 байт  md5 b8767d9beaabc764e2882719df65330b
                                            движок TI
 TiberianSun\Language.dll                      116736 байт  md5 fa1836533f7b94b774d1e06647273cfd
                                            русские строки

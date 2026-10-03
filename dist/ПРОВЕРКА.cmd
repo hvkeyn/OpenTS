@@ -1,4 +1,5 @@
 @echo off
+chcp 866 >nul
 set "ROOT=%~dp0"
 set "BAD=0"
 echo.
@@ -7,12 +8,12 @@ echo    Папка: %ROOT%
 echo.
 if not exist "%ROOT%TiberianSun\Game.exe" echo    НЕТ    TiberianSun\Game.exe  -  движок
 if not exist "%ROOT%TiberianSun\Game.exe" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7392256" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7392256" echo    НЕ ТО  TiberianSun\Game.exe  -  движок
+for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7394304" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7394304" echo    НЕ ТО  TiberianSun\Game.exe  -  движок
 if not exist "%ROOT%TwistedInsurrection\Game.exe" echo    НЕТ    TwistedInsurrection\Game.exe  -  движок TI
 if not exist "%ROOT%TwistedInsurrection\Game.exe" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7392256" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7392256" echo    НЕ ТО  TwistedInsurrection\Game.exe  -  движок TI
+for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7394304" set "BAD=1"
+for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7394304" echo    НЕ ТО  TwistedInsurrection\Game.exe  -  движок TI
 if not exist "%ROOT%TiberianSun\Language.dll" echo    НЕТ    TiberianSun\Language.dll  -  русские строки
 if not exist "%ROOT%TiberianSun\Language.dll" set "BAD=1"
 for %%A in ("%ROOT%TiberianSun\Language.dll") do if not "%%~zA"=="116736" set "BAD=1"
