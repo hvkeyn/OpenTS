@@ -8,20 +8,20 @@ echo    Папка: %ROOT%
 echo.
 if not exist "%ROOT%TiberianSun\Game.exe" echo    НЕТ    TiberianSun\Game.exe  -  движок
 if not exist "%ROOT%TiberianSun\Game.exe" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="6645760" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="6645760" echo    НЕ ТО  TiberianSun\Game.exe  -  движок
+for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7394304" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\Game.exe") do if not "%%~zA"=="7394304" echo    НЕ ТО  TiberianSun\Game.exe  -  движок
 if not exist "%ROOT%TwistedInsurrection\Game.exe" echo    НЕТ    TwistedInsurrection\Game.exe  -  движок TI
 if not exist "%ROOT%TwistedInsurrection\Game.exe" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="6645760" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="6645760" echo    НЕ ТО  TwistedInsurrection\Game.exe  -  движок TI
+for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7394304" set "BAD=1"
+for %%A in ("%ROOT%TwistedInsurrection\Game.exe") do if not "%%~zA"=="7394304" echo    НЕ ТО  TwistedInsurrection\Game.exe  -  движок TI
 if not exist "%ROOT%TiberianSun\Language.dll" echo    НЕТ    TiberianSun\Language.dll  -  русские строки
 if not exist "%ROOT%TiberianSun\Language.dll" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Language.dll") do if not "%%~zA"=="116224" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\Language.dll") do if not "%%~zA"=="116224" echo    НЕ ТО  TiberianSun\Language.dll  -  русские строки
+for %%A in ("%ROOT%TiberianSun\Language.dll") do if not "%%~zA"=="116736" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\Language.dll") do if not "%%~zA"=="116736" echo    НЕ ТО  TiberianSun\Language.dll  -  русские строки
 if not exist "%ROOT%TwistedInsurrection\Language.dll" echo    НЕТ    TwistedInsurrection\Language.dll  -  русские строки TI
 if not exist "%ROOT%TwistedInsurrection\Language.dll" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Language.dll") do if not "%%~zA"=="116224" set "BAD=1"
-for %%A in ("%ROOT%TwistedInsurrection\Language.dll") do if not "%%~zA"=="116224" echo    НЕ ТО  TwistedInsurrection\Language.dll  -  русские строки TI
+for %%A in ("%ROOT%TwistedInsurrection\Language.dll") do if not "%%~zA"=="116736" set "BAD=1"
+for %%A in ("%ROOT%TwistedInsurrection\Language.dll") do if not "%%~zA"=="116736" echo    НЕ ТО  TwistedInsurrection\Language.dll  -  русские строки TI
 if not exist "%ROOT%TiberianSun\8point.fnt" echo    НЕТ    TiberianSun\8point.fnt  -  шрифт с кириллицей
 if not exist "%ROOT%TiberianSun\8point.fnt" set "BAD=1"
 for %%A in ("%ROOT%TiberianSun\8point.fnt") do if not "%%~zA"=="12097" set "BAD=1"
@@ -64,16 +64,16 @@ for %%A in ("%ROOT%TiberianSun\SUPERPOWERS.INI") do if not "%%~zA"=="8949" set "
 for %%A in ("%ROOT%TiberianSun\SUPERPOWERS.INI") do if not "%%~zA"=="8949" echo    НЕ ТО  TiberianSun\SUPERPOWERS.INI  -  панель суперсил
 if not exist "%ROOT%TiberianSun\TEST01.MAP" echo    НЕТ    TiberianSun\TEST01.MAP  -  полигон 1
 if not exist "%ROOT%TiberianSun\TEST01.MAP" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST01.MAP") do if not "%%~zA"=="105040" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST01.MAP") do if not "%%~zA"=="105040" echo    НЕ ТО  TiberianSun\TEST01.MAP  -  полигон 1
+for %%A in ("%ROOT%TiberianSun\TEST01.MAP") do if not "%%~zA"=="105042" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\TEST01.MAP") do if not "%%~zA"=="105042" echo    НЕ ТО  TiberianSun\TEST01.MAP  -  полигон 1
 if not exist "%ROOT%TiberianSun\TEST02.MAP" echo    НЕТ    TiberianSun\TEST02.MAP  -  полигон 2
 if not exist "%ROOT%TiberianSun\TEST02.MAP" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST02.MAP") do if not "%%~zA"=="106270" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST02.MAP") do if not "%%~zA"=="106270" echo    НЕ ТО  TiberianSun\TEST02.MAP  -  полигон 2
+for %%A in ("%ROOT%TiberianSun\TEST02.MAP") do if not "%%~zA"=="106272" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\TEST02.MAP") do if not "%%~zA"=="106272" echo    НЕ ТО  TiberianSun\TEST02.MAP  -  полигон 2
 if not exist "%ROOT%TiberianSun\TEST03.MAP" echo    НЕТ    TiberianSun\TEST03.MAP  -  полигон 3
 if not exist "%ROOT%TiberianSun\TEST03.MAP" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST03.MAP") do if not "%%~zA"=="105932" set "BAD=1"
-for %%A in ("%ROOT%TiberianSun\TEST03.MAP") do if not "%%~zA"=="105932" echo    НЕ ТО  TiberianSun\TEST03.MAP  -  полигон 3
+for %%A in ("%ROOT%TiberianSun\TEST03.MAP") do if not "%%~zA"=="105934" set "BAD=1"
+for %%A in ("%ROOT%TiberianSun\TEST03.MAP") do if not "%%~zA"=="105934" echo    НЕ ТО  TiberianSun\TEST03.MAP  -  полигон 3
 if not exist "%ROOT%TwistedInsurrection\INI\Battle.ini" echo    НЕТ    TwistedInsurrection\INI\Battle.ini  -  список кампаний TI
 if not exist "%ROOT%TwistedInsurrection\INI\Battle.ini" set "BAD=1"
 for %%A in ("%ROOT%TwistedInsurrection\INI\Battle.ini") do if not "%%~zA"=="7396" set "BAD=1"

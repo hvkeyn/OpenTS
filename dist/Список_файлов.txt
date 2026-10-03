@@ -3,13 +3,13 @@ C&C: Tiberian Sun + Firestorm + Twisted Insurrection, русская сборк�
 Контрольные суммы важных файлов.
 Проверить сборку целиком можно файлом Проверка.cmd.
 
-TiberianSun\Game.exe                         6645760 байт  md5 b7179578863001556baf7440816ad4fe
+TiberianSun\Game.exe                         7394304 байт  md5 429b21b8b90ae546599968c79d59aa58
                                            движок
-TwistedInsurrection\Game.exe                 6645760 байт  md5 b7179578863001556baf7440816ad4fe
+TwistedInsurrection\Game.exe                 7394304 байт  md5 429b21b8b90ae546599968c79d59aa58
                                            движок TI
-TiberianSun\Language.dll                      116224 байт  md5 f1555a828d2dba440f28a5ef36955ca3
+TiberianSun\Language.dll                      116736 байт  md5 9e958e1578f64908d21188bd86755a10
                                            русские строки
-TwistedInsurrection\Language.dll              116224 байт  md5 f1555a828d2dba440f28a5ef36955ca3
+TwistedInsurrection\Language.dll              116736 байт  md5 9e958e1578f64908d21188bd86755a10
                                            русские строки TI
 TiberianSun\8point.fnt                         12097 байт  md5 c3374ab16337268947c10bf7d3231795
                                            шрифт с кириллицей
@@ -33,11 +33,11 @@ TiberianSun\SUPERPOWERS.INI                     8949 байт  md5 1413ade97cbd7
                                            панель суперсил
 TiberianSun\SUN.INI                              914 байт  md5 fce1dcf4f44685a8672280ebb0ee96de
                                            разрешение и скорость
-TiberianSun\TEST01.MAP                        105040 байт  md5 a4dfcd42be6d13669a84dbd293b7c177
+TiberianSun\TEST01.MAP                        105042 байт  md5 f2b4472dd5a2fd5ae6e44a7109ca2b38
                                            полигон 1
-TiberianSun\TEST02.MAP                        106270 байт  md5 b1c76b400006adf92bc4344ae250aa08
+TiberianSun\TEST02.MAP                        106272 байт  md5 6e07fee98706766610cf5a89cb75bdab
                                            полигон 2
-TiberianSun\TEST03.MAP                        105932 байт  md5 4a2866eb329e1668406fc51aefd617d1
+TiberianSun\TEST03.MAP                        105934 байт  md5 eee90cdc4c136685a01dd720a08248dc
                                            полигон 3
 TwistedInsurrection\INI\Battle.ini              7396 байт  md5 ebd9bae33be9f8d2f1cbca32f987e207
                                            список кампаний TI
