@@ -1,4 +1,4 @@
-# Updates this Russian package from the latest OpenTS build published on GitHub.
+﻿# Updates this Russian package from the latest OpenTS build published on GitHub.
 #
 # The release the build carries (OpenTS-<tag>-Win32.zip) holds Game.exe and
 # Language.dll. This script downloads it, replaces the engine in both games,
@@ -77,6 +77,9 @@ try {
     $headers = @{ 'User-Agent' = 'OpenTS-RU-updater' }
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers $headers -TimeoutSec 8
 } catch {
+    # Record the attempt anyway so an offline machine does not wait on the timeout
+    # before every launch.
+    Set-Content -LiteralPath $stampFile -Value ((Get-Date).ToString('s')) -Encoding ASCII
     Say 'Update check failed (no network or no release yet).'
     exit 0
 }
@@ -164,5 +167,5 @@ Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 
 Say "Updated to $tag."
 Say "Engine md5: $newHash"
-Say 'Run ПРОВЕРКА.cmd to confirm the build.'
+Say 'Run the build check to confirm the build.'
 exit 0
