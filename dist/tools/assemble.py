@@ -46,7 +46,7 @@ def main(argv):
         print("copying into", ti)
         print("   files:", copy_tree(os.path.join(DIST, "game_ti"), ti))
 
-    for name in ("Play.cmd", "КАК ИГРАТЬ.txt"):
+    for name in ("Play.cmd", "Как_играть.txt"):
         src = os.path.join(DIST, name)
         if os.path.exists(src):
             shutil.copy2(src, os.path.join(build, name))

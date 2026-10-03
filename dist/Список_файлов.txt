@@ -1,7 +1,7 @@
 C&C: Tiberian Sun + Firestorm + Twisted Insurrection, русская сборка OpenTS
 
 Контрольные суммы важных файлов.
-Проверить сборку целиком можно файлом ПРОВЕРКА.cmd.
+Проверить сборку целиком можно файлом Проверка.cmd.
 
 TiberianSun\Game.exe                         7394304 байт  md5 b8767d9beaabc764e2882719df65330b
                                            движок

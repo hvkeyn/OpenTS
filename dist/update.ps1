@@ -23,33 +23,33 @@ function Say([string]$text) {
 }
 
 # Keep the build check honest about the engine that was just installed. The
-# launcher and the check are stored in code page 866; the file listing is UTF-8.
+# launcher and the check are UTF-8 now; the file listing is UTF-8 too.
 function Update-Checks([string]$Root, [long]$Size, [string]$Hash) {
-    $cp866 = [System.Text.Encoding]::GetEncoding(866)
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
 
     $play = Join-Path $Root 'Play.cmd'
     if (Test-Path $play) {
-        $text = [IO.File]::ReadAllText($play, $cp866)
+        $text = [IO.File]::ReadAllText($play, $utf8)
         $match = [regex]::Match($text, 'ENGINE_SIZE=(\d+)')
         if ($match.Success) {
             $text = $text.Replace('ENGINE_SIZE=' + $match.Groups[1].Value, 'ENGINE_SIZE=' + [string]$Size)
-            [IO.File]::WriteAllText($play, $text, $cp866)
+            [IO.File]::WriteAllText($play, $text, $utf8)
         }
     }
 
-    $check = Join-Path $Root 'ПРОВЕРКА.cmd'
+    $check = Join-Path $Root 'Проверка.cmd'
     if (Test-Path $check) {
-        $text = [IO.File]::ReadAllText($check, $cp866)
+        $text = [IO.File]::ReadAllText($check, $utf8)
         $match = [regex]::Match($text, '"(\d{6,})"')
         if ($match.Success) {
             $text = $text.Replace('"' + $match.Groups[1].Value + '"', '"' + [string]$Size + '"')
-            [IO.File]::WriteAllText($check, $text, $cp866)
+            [IO.File]::WriteAllText($check, $text, $utf8)
         }
     }
 
-    $list = Join-Path $Root 'СПИСОК ФАЙЛОВ.txt'
+    $list = Join-Path $Root 'Список_файлов.txt'
     if (Test-Path $list) {
-        $text = [IO.File]::ReadAllText($list, [System.Text.Encoding]::UTF8)
+        $text = [IO.File]::ReadAllText($list, $utf8)
         $lines = $text -split "`r`n"
         $replacement = '${1}' + [string]$Size + '${2}' + $Hash
         for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -57,9 +57,20 @@ function Update-Checks([string]$Root, [long]$Size, [string]$Hash) {
                 $lines[$i] = [regex]::Replace($lines[$i], '(Game\.exe\s+)\d+(\s+\S+\s+md5\s+)[0-9a-f]{32}', $replacement)
             }
         }
-        [IO.File]::WriteAllText($list, ($lines -join "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+        [IO.File]::WriteAllText($list, ($lines -join "`r`n"), $utf8)
     }
 }
+
+# The package once carried these names; a build updated in place would end up
+# with both the old and the new file. Drop the old ones.
+function Remove-Legacy([string]$Root) {
+    foreach ($name in @('Проверка.cmd', 'Список_файлов.txt', 'Обновить.cmd', 'Как_играть.txt')) {
+        $path = Join-Path $Root $name
+        if (Test-Path $path) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+Remove-Legacy $root
 
 $versionFile = Join-Path $root 'VERSION.txt'
 $stampFile = Join-Path $root '.lastupdatecheck'
