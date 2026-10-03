@@ -421,7 +421,7 @@ bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 	/*
 	**	perform some preliminary checks for validity.
 	*/
-	if (!teamtype || !teamtype->TaskForce->ClassCount || teamtype->House == NULL) return(false);
+	if (!teamtype || teamtype->TaskForce == NULL || teamtype->TaskForce->ClassCount == 0 || teamtype->House == NULL) return(false);
 
 	AircraftTypeClass const * dshp = AircraftTypes[AircraftTypeClass::From_Name("DSHP")];
 	if (teamtype->TaskForce->ClassCount == 1 && teamtype->TaskForce->Members[0].Class == dshp && teamtype->House->CurrentDropship < 3) {
@@ -460,12 +460,14 @@ bool Do_Reinforcements(TeamTypeClass const * teamtype, WAYPOINT wp)
 	**	team if there are no team missions previously assigned.
 	*/
 	ScriptTypeClass * script = teamtype->Script;
-	int count = script->MissionCount;
-	if (script->MissionCount == 0) {
-		TeamMissionClass tmission(TMISSION_ATT_WAYPT, 0);
-		if (count < MAX_TEAM_MISSIONS) {
-			script->MissionList[count] = tmission;
-			script->MissionCount++;
+	if (script != NULL) {
+		int count = script->MissionCount;
+		if (count == 0) {
+			TeamMissionClass tmission(TMISSION_ATT_WAYPT, 0);
+			if (count < MAX_TEAM_MISSIONS) {
+				script->MissionList[count] = tmission;
+				script->MissionCount++;
+			}
 		}
 	}
 
