@@ -25,7 +25,7 @@ if not "%ENGINE%"=="%ENGINE_SIZE%" goto wrongbuild
 rem Обновление с GitHub (отключается переменной NOUPDATE=1; без сети просто пропускается)
 if not "%NOUPDATE%"=="1" if exist "%~dp0update.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0update.ps1" -Quiet
 
-title C&C Tiberian Sun - выбор игры
+title Tiberian Sun / Firestorm / Twisted Insurrection
 
 
 

@@ -24,7 +24,10 @@ function Say([string]$text) {
 
 # Keep the build check honest about the engine that was just installed. The
 # launcher and the check are UTF-8 now; the file listing is UTF-8 too.
-function Update-Checks([string]$Root, [long]$Size, [string]$Hash) {
+# Обновляет ожидания в файлах проверки под то, что установили: и движок, и строки.
+# Без строк проверка начинала ругаться на Language.dll, который обновился вместе
+# с движком: размер у него другой, а ожидание оставалось прежним.
+function Update-Checks([string]$Root, [long]$Size, [string]$Hash, [long]$DllSize = -1, [string]$DllHash = '') {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
 
     $play = Join-Path $Root 'Play.cmd'
@@ -40,21 +43,28 @@ function Update-Checks([string]$Root, [long]$Size, [string]$Hash) {
     $check = Join-Path $Root 'Проверка.cmd'
     if (Test-Path $check) {
         $text = [IO.File]::ReadAllText($check, $utf8)
-        $match = [regex]::Match($text, '"(\d{6,})"')
-        if ($match.Success) {
-            $text = $text.Replace('"' + $match.Groups[1].Value + '"', '"' + [string]$Size + '"')
-            [IO.File]::WriteAllText($check, $text, $utf8)
+        $lines = $text -split "`r`n"
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match 'Game\.exe') {
+                $lines[$i] = [regex]::Replace($lines[$i], '"\d{6,}"', '"' + [string]$Size + '"')
+            } elseif ($DllSize -gt 0 -and $lines[$i] -match 'Language\.dll') {
+                $lines[$i] = [regex]::Replace($lines[$i], '"\d{6,}"', '"' + [string]$DllSize + '"')
+            }
         }
+        [IO.File]::WriteAllText($check, ($lines -join "`r`n"), $utf8)
     }
 
     $list = Join-Path $Root 'Список_файлов.txt'
     if (Test-Path $list) {
         $text = [IO.File]::ReadAllText($list, $utf8)
         $lines = $text -split "`r`n"
-        $replacement = '${1}' + [string]$Size + '${2}' + $Hash
         for ($i = 0; $i -lt $lines.Count; $i++) {
             if ($lines[$i] -match 'Game\.exe') {
-                $lines[$i] = [regex]::Replace($lines[$i], '(Game\.exe\s+)\d+(\s+\S+\s+md5\s+)[0-9a-f]{32}', $replacement)
+                $lines[$i] = [regex]::Replace($lines[$i], '(Game\.exe\s+)\d+(\s+\S+\s+md5\s+)[0-9a-f]{32}',
+                    '${1}' + [string]$Size + '${2}' + $Hash)
+            } elseif ($DllSize -gt 0 -and $lines[$i] -match 'Language\.dll') {
+                $lines[$i] = [regex]::Replace($lines[$i], '(Language\.dll\s+)\d+(\s+\S+\s+md5\s+)[0-9a-f]{32}',
+                    '${1}' + [string]$DllSize + '${2}' + $DllHash)
             }
         }
         [IO.File]::WriteAllText($list, ($lines -join "`r`n"), $utf8)
@@ -174,7 +184,13 @@ if (-not $changed) {
     exit 0
 }
 
-Update-Checks -Root $root -Size $newSize -Hash $newHash
+if ($null -ne $newDll) {
+    $newDllHash = (Get-FileHash -Algorithm MD5 -LiteralPath $newDll.FullName).Hash.ToLower()
+    $newDllSize = (Get-Item -LiteralPath $newDll.FullName).Length
+    Update-Checks -Root $root -Size $newSize -Hash $newHash -DllSize $newDllSize -DllHash $newDllHash
+} else {
+    Update-Checks -Root $root -Size $newSize -Hash $newHash
+}
 Set-Content -LiteralPath $versionFile -Value $tag -Encoding ASCII
 Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 
