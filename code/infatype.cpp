@@ -117,6 +117,20 @@ InfantryTypeClass::InfantryTypeClass(char const * ininame) :
 	IsScanner = true;
 	IsRepairable = false;
 	IsCrew = false;
+
+	/*
+	 * Every soldier carries a full set of action controls, even when its artwork names no
+	 * sequence, so nothing that reaches for them - the save writer, the sync check, the
+	 * shape lookup - has to test the pointer first.
+	 */
+	DoInfoStruct * controls = new DoInfoStruct[DO_COUNT];
+	for (int i = 0; i < DO_COUNT; i++) {
+		controls[i].Frame = 0;
+		controls[i].Count = 0;
+		controls[i].Jump = 0;
+		controls[i].Facing = FACING_NONE;
+	}
+	DoControls = controls;
 }
 
 
@@ -485,9 +499,10 @@ void InfantryTypeClass::Serialize(SaveStreamClass & stream)
 	 * The animation sequence data hangs off the type rather than living inside it, so the
 	 * pointer means nothing to a save game and the block it names travels instead.
 	 */
-	if (stream.Is_Loading()) {
-		DoControls = new DoInfoStruct[DO_COUNT];
-	}
+	/*
+	 * The constructor gives every type a full set of controls, so the block is never null;
+	 * a save writes it out and a load reads it back over the same block.
+	 */
 	stream.Serialize_Bytes((void *)DoControls, sizeof(*DoControls) * DO_COUNT);
 
 	stream.Serialize(FireLaunch);
