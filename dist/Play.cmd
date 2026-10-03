@@ -22,6 +22,8 @@ rem ---------------------------------------------------------------------------
 if not exist "%~dp0TiberianSun\Game.exe" goto nobuild
 for %%A in ("%~dp0TiberianSun\Game.exe") do set "ENGINE=%%~zA"
 if not "%ENGINE%"=="%ENGINE_SIZE%" goto wrongbuild
+rem Обновление с GitHub (отключается переменной NOUPDATE=1; без сети просто пропускается)
+if not "%NOUPDATE%"=="1" if exist "%~dp0update.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0update.ps1" -Quiet
 
 title C&C Tiberian Sun - выбор игры
 
