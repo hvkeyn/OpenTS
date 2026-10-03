@@ -551,3 +551,24 @@ bool UTF8::Looks_Cyrillic(std::string_view text)
 	}
 	return(false);
 }
+
+
+/// <summary>
+/// Converts UTF-8 text into the UTF-16 the Windows text entry points take.
+/// A malformed or truncated sequence becomes REPLACEMENT, so the conversion never fails.
+/// </summary>
+std::wstring UTF8::To_UTF16(std::string_view text)
+{
+	if (text.empty()) {
+		return(std::wstring());
+	}
+
+	int const count = MultiByteToWideChar(CP_UTF8, 0, text.data(), (int)text.size(), NULL, 0);
+	if (count <= 0) {
+		return(std::wstring());
+	}
+
+	std::wstring wide((std::size_t)count, L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, text.data(), (int)text.size(), wide.data(), count);
+	return(wide);
+}

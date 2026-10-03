@@ -80,8 +80,8 @@ COLORREF ODColorUnused1;
  */
 HFONT ODFontPtr;
 HFONT ODListFontPtr;
-char const * ODFontName = "MS Sans Serif";
-char const * ODListFontName = "MS Sans Serif";
+char const * ODFontName = "Microsoft Sans Serif";
+char const * ODListFontName = "Microsoft Sans Serif";
 int ODFontSize = 14;
 int ODListFontSize = 12;
 
@@ -133,26 +133,27 @@ BOOL CALLBACK InitializeCtrl(HWND window, LPARAM lparam);
 void ODDrawCharRemap(Surface & dst_surf, const char *text, int max_chars, Rect const & rect, char const *font_name, COLORREF color, char flags, int char_spacing);
 
 
+/*
+ * GDI draws narrow text in the code page the font declares rather than in the UTF-8 the
+ * engine keeps everything in, so UTF-8 handed to the ANSI text calls comes out as mojibake
+ * on a system whose page differs. Measuring and drawing both convert to wide text and call
+ * the wide entry points, which read the same string on every system.
+ */
+static SIZE OD_Text_Size(HDC hdc, char const * text, int len)
+{
+	std::wstring wide = UTF8::To_UTF16(std::string_view(text, (std::size_t)len));
+	SIZE size = {0, 0};
+	if (!wide.empty()) {
+		GetTextExtentPoint32W(hdc, wide.c_str(), (int)wide.size(), &size);
+	}
+	return(size);
+}
+
+
 // The dialog fonts are 256-cell sheets. A Russian localization replaces them with sheets
 // laid out as code page 1251, so a cyrillic code point is looked up there first; the
 // Windows-1252 layout the sheets otherwise declare still answers for everything else.
 // A code point neither layout carries draws as '?'.
-/*
- * Is the code page the system draws ANSI text in a cyrillic one? GDI goes by the system
- * locale rather than by the UTF-8 page the game itself works in, so text handed to it has
- * to be converted before it is drawn.
- */
-static bool OD_System_Page_Is_Cyrillic(void)
-{
-	static int cached = -1;
-	if (cached < 0) {
-		char buffer[16] = {0};
-		int const length = GetLocaleInfoA(LOCALE_SYSTEM_DEFAULT, LOCALE_IDEFAULTANSICODEPAGE,
-			buffer, sizeof(buffer));
-		cached = (length > 0 && atoi(buffer) == 1251) ? 1 : 0;
-	}
-	return(cached == 1);
-}
 
 
 static unsigned char OD_Glyph(char32_t code)
@@ -1565,8 +1566,7 @@ static LRESULT CALLBACK CtrlProc_Internal(HWND window, UINT message, WPARAM wpar
 								}
 								SetTextColor(hdc, ODColorText);
 								SetBkMode(hdc, TRANSPARENT);
-								SIZE size;
-								GetTextExtentPoint32(hdc, buf, strlen(buf), &size);
+								SIZE size = OD_Text_Size(hdc, buf, strlen(buf));
 								ReleaseDC(window, hdc);
 
 								POINT cursor;
@@ -3465,10 +3465,8 @@ logged++;
 									max_width = display_rect.right - column->xPos - item_rect.left - display_rect.left;
 								}
 								SendMessage(window, OD_RESTOREDC, 0, (LPARAM)dc);
-								SIZE ellipsis_size;
-								GetTextExtentPoint32(dc, "...", strlen("..."), &ellipsis_size);
-								SIZE text_size;
-								GetTextExtentPoint32(dc, string, strlen(string), &text_size);
+								SIZE ellipsis_size = OD_Text_Size(dc, "...", 3);
+								SIZE text_size = OD_Text_Size(dc, string, strlen(string));
 								if (text_size.cx > max_width) {
 									while (true) {
 										int len = strlen(string);
@@ -3476,7 +3474,7 @@ logged++;
 											break;
 										}
 										string[strlen(string) - 1] = '\0';
-										GetTextExtentPoint32(dc, string, strlen(string), &text_size);
+										text_size = OD_Text_Size(dc, string, strlen(string));
 										text_size.cx += ellipsis_size.cx;
 										if (text_size.cx <= max_width) {
 											strcat(string, "...");
@@ -3548,10 +3546,8 @@ logged++;
 						if (data->font != NULL) {
 							SelectObject(dc, data->font);
 						}
-						SIZE ellipsis_size;
-						GetTextExtentPoint32(dc, "...", strlen("..."), &ellipsis_size);
-						SIZE text_size;
-						GetTextExtentPoint32(dc, string, strlen(string), &text_size);
+						SIZE ellipsis_size = OD_Text_Size(dc, "...", 3);
+						SIZE text_size = OD_Text_Size(dc, string, strlen(string));
 						if (text_size.cx > max_width && text_size.cx + ellipsis_size.cx > max_width) {
 							while (true) {
 								int len = strlen(string);
@@ -3559,7 +3555,7 @@ logged++;
 									break;
 								}
 								string[strlen(string) - 1] = '\0';
-								GetTextExtentPoint32(dc, string, strlen(string), &text_size);
+								text_size = OD_Text_Size(dc, string, strlen(string));
 								if (text_size.cx + ellipsis_size.cx <= max_width) {
 									strcat(string, "...");
 									break;
@@ -4999,14 +4995,15 @@ LRESULT CALLBACK GroupBoxCtrlProc(HWND window, UINT message, WPARAM wparam, LPAR
 			char text[256];
 			GetWindowText(window, text, sizeof(text));
 
-			SIZE text_size;
-			GetTextExtentPoint32(hdc, text, strlen(text), &text_size);
+			std::wstring wide = UTF8::To_UTF16(text);
+			SIZE text_size = {0, 0};
+			GetTextExtentPoint32W(hdc, wide.c_str(), (int)wide.size(), &text_size);
 
 			RECT rect;
 			Get_Display_Rect(window, &rect);
 
 			int y = rect.top + text_size.cy / 2;
-			TextOut(hdc, rect.left + 10, rect.top, text, strlen(text));
+			TextOutW(hdc, rect.left + 10, rect.top, wide.c_str(), (int)wide.size());
 
 			((DSurface *)AlternateSurface)->ReleaseDC(hdc);
 
@@ -5744,9 +5741,10 @@ int ODDrawTextBG(Surface & surface, LPCSTR string, LPRECT rect, HGDIOBJ font, CO
 	SetTextColor(hdc, color);
 	SetBkMode(hdc, TRANSPARENT);
 
-	SIZE char_size;
-	GetTextExtentPoint32(hdc, string, strlen(string), &char_size);
-	DrawText(hdc, string, strlen(string), rect, format);
+	std::wstring wide = UTF8::To_UTF16(string);
+	SIZE char_size = {0, 0};
+	GetTextExtentPoint32W(hdc, wide.c_str(), (int)wide.size(), &char_size);
+	DrawTextW(hdc, wide.c_str(), (int)wide.size(), rect, format);
 
 	((DSurface &)surface).ReleaseDC(hdc);
 
@@ -6212,26 +6210,10 @@ int OD_Draw_Text(COLORREF color, HFONT font, Rect const & rect, const char * tex
 		}
 
 		SetTextColor(hDC, color);
-		/*
-		 * A font that declares a cyrillic code page makes GDI read the text as that
-		 * page rather than as the UTF-8 the game keeps it in, which would draw every
-		 * letter as the wrong one. Hand such a font the text in its own page.
-		 */
-		/*
-		 * GDI draws text in the code page the device expects, which on a localized system is
-		 * the system locale's own page rather than the UTF-8 the game keeps its text in. A
-		 * cyrillic page is answered by handing the text over in that page.
-		 */
-		std::string transcoded;
-		if (OD_System_Page_Is_Cyrillic()) {
-			transcoded = UTF8::To_Windows_1251(std::string_view(text, len));
-			text = transcoded.c_str();
-			len = (int)transcoded.size();
-		}
-
 		SetBkMode(hDC, TRANSPARENT);
 
-		GetTextExtentPoint32(hDC, text, len, &text_size);
+		std::wstring wide = UTF8::To_UTF16(std::string_view(text, (std::size_t)len));
+		GetTextExtentPoint32W(hDC, wide.c_str(), (int)wide.size(), &text_size);
 
 		int x_offset = rect.X;
 		int y_offset = rect.Y;
@@ -6252,7 +6234,7 @@ int OD_Draw_Text(COLORREF color, HFONT font, Rect const & rect, const char * tex
 			y_offset += -1 - text_size.cy;
 		}
 
-		TextOut(hDC, x_offset, y_offset, text, len);
+		TextOutW(hDC, x_offset, y_offset, wide.c_str(), (int)wide.size());
 		destsurf->ReleaseDC(hDC);
 	} else {
 		text_size.cx = 0;

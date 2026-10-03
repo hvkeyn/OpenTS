@@ -60,6 +60,7 @@
 #include "sun.h"
 #include "terrain.h"
 #include "terrtype.h"
+#include "utf8.h"
 #include "vector.h"
 #include "vein.h"
 #include "waypoint.h"
@@ -1375,13 +1376,14 @@ void Tactical::Draw_Screen_Text(char const * text)
 		Rect rect = TacticalRect;
 		HDC hdc = surface->GetDC();
 		if (hdc != NULL) {
-			HFONT font = CreateFont(28, 20, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_RASTER_PRECIS, CLIP_DEFAULT_PRECIS, PROOF_QUALITY, FF_SWISS | DEFAULT_PITCH, NULL);
+			HFONT font = CreateFont(28, 20, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, PROOF_QUALITY, FF_SWISS | DEFAULT_PITCH, "Microsoft Sans Serif");
 			HGDIOBJ h = SelectObject(hdc, font);
 			Point2D point = Point2D(TacticalRect.Width / 2, TacticalRect.Height / 2);
 			SetBkMode(hdc, TRANSPARENT);
 			SetTextAlign(hdc, TA_CENTER);
 			SetTextColor(hdc, RGB(255, 255, 255));
-			TextOut(hdc, rect.X + point.X, rect.Y + point.Y, text, strlen(text));
+			std::wstring wide = UTF8::To_UTF16(text);
+			TextOutW(hdc, rect.X + point.X, rect.Y + point.Y, wide.c_str(), (int)wide.size());
 			SelectObject(hdc, h);
 			DeleteObject(font);
 			surface->ReleaseDC(hdc);

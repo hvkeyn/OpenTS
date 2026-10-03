@@ -55,4 +55,7 @@ namespace UTF8
 	std::string From_Windows_1251(std::string_view text);
 	bool Looks_Cyrillic(std::string_view text);
 	int OEM_866_Glyph(char32_t code);
+
+	// Wide text for the Windows text entry points, which take UTF-16 on every system.
+	std::wstring To_UTF16(std::string_view text);
 }

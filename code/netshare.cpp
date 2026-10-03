@@ -234,8 +234,9 @@ void _DrawMessage(int color, const char * message, HWND window)
 			}
 		}
 
-		SIZE size;
-		GetTextExtentPoint32(hdc, message, length, &size);
+		std::wstring wide = UTF8::To_UTF16(std::string_view(message, (std::size_t)length));
+		SIZE size = {0, 0};
+		GetTextExtentPoint32W(hdc, wide.c_str(), (int)wide.size(), &size);
 		int maxWidth = rect.right - rect.left - offset;
 
 		if (size.cx >= maxWidth - 4) {
