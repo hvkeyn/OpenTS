@@ -552,22 +552,22 @@ int main(void)
 	{
 		INIClass ini;
 		Read(ini, "[General]\nLegacy=caf\xE9\nPlain=caf\xC3\xA9\n");
-		Check(Value_Is(ini, "General", "Legacy", "caf\xC3\xA9"), "a Windows-1252 value is read as its UTF-8 form");
+		Check(Value_Is(ini, "General", "Legacy", "caf\xD0\xB9"), "a byte that is not UTF-8 is read in code page 1251");
 		Check(Value_Is(ini, "General", "Plain", "caf\xC3\xA9"), "a UTF-8 value is left as it is");
 		Check(ini.Transcoded_Lines() == 1, "only the line that was not UTF-8 counts as transcoded");
 	}
 
 	{
-		// The digest stored in a Windows-1252 file was taken over the bytes that file held,
+		// The digest stored in a code page 1251 file was taken over the bytes that file held,
 		// so what a transcoded database saves has to convert back to them unchanged.
 		INIClass ini;
 		Read(ini, "[General]\nName=caf\xE9\nOwner=Bj\xF6rn\n");
 		Check(ini.Transcoded_Lines() == 2, "every line that was not UTF-8 counts as transcoded");
 
 		std::string saved = Save_Bytes(ini);
-		Check(saved == "[General]\r\nName=caf\xC3\xA9\r\nOwner=Bj\xC3\xB6rn\r\n",
+		Check(saved == "[General]\r\nName=caf\xD0\xB9\r\nOwner=Bj\xD1\x86rn\r\n",
 			"a transcoded database saves as UTF-8");
-		Check(UTF8::To_Windows_1252(saved) == "[General]\r\nName=caf\xE9\r\nOwner=Bj\xF6rn\r\n",
+		Check(UTF8::To_Windows_1251(saved) == "[General]\r\nName=caf\xE9\r\nOwner=Bj\xF6rn\r\n",
 			"the saved text converts back to the bytes the file held");
 	}
 
