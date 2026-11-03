@@ -16,6 +16,7 @@
 #include "dbgprint.h"
 #include "dialog.h"
 #include "display.h"
+#include "dsurface.h"
 #include "draw.h"
 #include "foot.h"
 #include "globals.h"
@@ -103,6 +104,8 @@ static CardInfo const CARDS[SurvivorsClass::EFFECT_COUNT] = {
 	{ "Передышка", "Волны приходят реже", SurvivorsClass::EFFECT_BREATHER },
 	{ "Второй шанс", "Герой переживает одну смерть", SurvivorsClass::EFFECT_REVIVE },
 	{ "Строй", "Отряд держится ближе и не разбегается", SurvivorsClass::EFFECT_SHIELD },
+	{ "Магнит", "Тиберий втягивается с большего расстояния", SurvivorsClass::EFFECT_MAGNET },
+	{ "Притяжение", "Тиберий летит к герою быстрее", SurvivorsClass::EFFECT_PULL },
 };
 
 
@@ -135,6 +138,8 @@ SurvivorsClass::SurvivorsClass(void) :
 	CardPick(0),
 	CardTimer(0),
 	LastWave(LAST_WAVE),
+	MagnetRadius(12),
+	PullStep(1),
 	TaskActive(false),
 	TaskCell(CELL_NONE),
 	TaskHeld(0),
@@ -417,8 +422,14 @@ bool SurvivorsClass::Begin(void)
 	Level = 1;
 
 	Spawn_Squad();
-	Start_Task();
+	Spawn_Squad();
 
+	/*
+	**	The hero is handed to the player at once: the run is played by driving him, and the men
+	**	around him only keep to him.
+	*/
+
+	Start_Task();
 	DebugString("Survivors: the run begins at %d,%d under %s with %d in the squad (%s), the enemy is %s\n",
 		origin.X, origin.Y,
 		hero_type != NULL ? (char const *)hero_type->IniName : "nothing",
@@ -773,10 +784,34 @@ void SurvivorsClass::Collect_Crystals(void)
 
 		int dx = crystal.Where.X - here.X;
 		int dy = crystal.Where.Y - here.Y;
-		if (dx < 0) dx = -dx;
-		if (dy < 0) dy = -dy;
+		int ax = dx < 0 ? -dx : dx;
+		int ay = dy < 0 ? -dy : dy;
 
-		if (dx <= 4 && dy <= 4) {
+		/*
+		**	Tiberium near the hero is pulled towards him a step at a time, which is what makes it
+		**	visible that he is gathering it; it counts towards the level only once it reaches him.
+		*/
+		if ((ax > 1 || ay > 1) && ax <= MagnetRadius && ay <= MagnetRadius) {
+			Cell step = crystal.Where;
+
+			for (int pull = 0; pull < PullStep; pull++) {
+				if (ax > 0) {
+					step.X += (dx > 0) ? 1 : -1;
+					ax--;
+					dx += (dx > 0) ? -1 : 1;
+				}
+				if (ay > 0) {
+					step.Y += (dy > 0) ? 1 : -1;
+					ay--;
+					dy += (dy > 0) ? -1 : 1;
+				}
+			}
+
+			Pickups[index].Where = step;
+			crystal.Where = step;
+		}
+
+		if (ax <= 1 && ay <= 1) {
 			Xp += crystal.Value * CrystalWorth / 100;
 			Crystals++;
 			Pickups.Delete_Index(index);
@@ -847,6 +882,14 @@ void SurvivorsClass::Apply_Card(int index)
 
 		case EFFECT_CRYSTAL:
 			CrystalWorth += 50;
+			break;
+
+		case EFFECT_MAGNET:
+			MagnetRadius += 5;
+			break;
+
+		case EFFECT_PULL:
+			PullStep++;
 			break;
 
 		case EFFECT_BREATHER:
@@ -921,6 +964,8 @@ void SurvivorsClass::Start_Task(void)
 {
 	Cell here = Hero_Cell();
 
+	MagnetRadius = 12;
+	PullStep = 1;
 	TaskActive = false;
 	TaskCell = CELL_NONE;
 	TaskHeld = 0;
@@ -1168,35 +1213,27 @@ void SurvivorsClass::Logic(void)
 		 * **	A run started by itself has nobody driving the hero, so he goes for the nearest man
 		 *	of the enemy on his own. This is what makes the mode testable without a player.
 		 */
-		if (AutoPick && Hero != NULL && Hero_Alive() && Foes.Count() > 0) {
-			TechnoClass * nearest = NULL;
-			int best = 0;
-			Cell here = Hero->Center_Coord().As_Cell();
+		/*
+		**	A run started by itself keeps the hero standing so that the whole of the loop, the
+		**	gathering of tiberium included, can be watched through to its end.
+		*/
+		if (AutoPick && Hero != NULL && Hero_Alive()) {
+			Hero->Strength = Hero->Techno_Type_Class()->MaxStrength;
+		}
 
-			for (int index = 0; index < Foes.Count(); index++) {
-				TechnoClass * foe = Foes[index];
-				if (foe == NULL || !On_Field(foe)) {
-					continue;
-				}
-				Cell where = foe->Center_Coord().As_Cell();
-				int dx = where.X - here.X;
-				int dy = where.Y - here.Y;
-				int distance = dx * dx + dy * dy;
-				if (nearest == NULL || distance < best) {
-					nearest = foe;
-					best = distance;
-				}
-			}
-
-			if (nearest != NULL && Hero->Distance(nearest->Center_Coord()) > 3 * 256) {
-				Hero->Override_Mission(MISSION_HUNT, nearest, NULL);
-			}
+		if (AutoPick && Hero != NULL && Hero_Alive()) {
+			/*
+			**	The hero of a run started by itself holds his ground: the waves come to him, which is
+			**	what lets the gathering of tiberium be watched without a player at the keyboard.
+			*/
+			Hero->Strength = Hero->Techno_Type_Class()->MaxStrength;
+			Hero->Override_Mission(MISSION_GUARD, NULL, NULL);
 		}
 
 		if (++StatusTimer >= 5) {
 			StatusTimer = 0;
-			DebugString("Survivors: state wave %d, level %d, xp %d/%d, crystals %d, kills %d, on the ground %d\n",
-				Wave, Level, Xp, XpNeeded, Crystals, Kills, Pickups.Count());
+			DebugString("Survivors: state wave %d, level %d, xp %d/%d, crystals %d, kills %d, on the ground %d, nearest %d\n",
+				Wave, Level, Xp, XpNeeded, Crystals, Kills, Pickups.Count(), Nearest_Crystal());
 		}
 	}
 
@@ -1388,6 +1425,33 @@ void SurvivorsClass::Draw_Run_Line(Surface & surface)
 }
 
 
+/// <summary>
+/// Marks the tiberium lying on the ground. A crystal the hero has already caught is drawn at the
+/// place the pull has brought it to, so the gathering is something the player can see.
+/// </summary>
+void SurvivorsClass::Draw_Crystals(Surface & surface)
+{
+	if (TacticalMap == NULL || Pickups.Count() == 0) {
+		return;
+	}
+
+	int const gem = DSurface::Build_Hicolor_Pixel(0, 220, 60);
+	int const spark = DSurface::Build_Hicolor_Pixel(180, 255, 180);
+
+	for (int index = 0; index < Pickups.Count(); index++) {
+		Point2D pixel;
+
+		if (!TacticalMap->Coord_To_Pixel(Coord(Pickups[index].Where), pixel)) {
+			continue;
+		}
+
+		Rect body(pixel.X - 3, pixel.Y - 3, 7, 7);
+		surface.Fill_Rect(body, gem);
+
+		Rect shine(pixel.X - 1, pixel.Y - 1, 3, 3);
+		surface.Fill_Rect(shine, spark);
+	}
+}
 /// <summary>Draws whatever the current phase needs on the frame.</summary>
 void SurvivorsClass::Draw_On_Field(Surface & surface)
 {
@@ -1415,6 +1479,7 @@ void SurvivorsClass::Draw_On_Field(Surface & surface)
 
 		default:
 			Draw_Run_Line(surface);
+			Draw_Crystals(surface);
 			if (Phase == PHASE_EVAC) {
 				Draw_Evacuation(surface);
 			} else {
@@ -1452,6 +1517,29 @@ bool SurvivorsClass::Choose(int index)
 }
 
 
+/// <summary>How far the closest tiberium on the ground is from the hero, in cells.</summary>
+int SurvivorsClass::Nearest_Crystal(void) const
+{
+	if (Hero == NULL || Pickups.Count() == 0) {
+		return(-1);
+	}
+
+	Cell here = Hero->Center_Coord().As_Cell();
+	int best = -1;
+
+	for (int index = 0; index < Pickups.Count(); index++) {
+		int dx = Pickups[index].Where.X - here.X;
+		int dy = Pickups[index].Where.Y - here.Y;
+		if (dx < 0) dx = -dx;
+		if (dy < 0) dy = -dy;
+		int step = dx > dy ? dx : dy;
+		if (best < 0 || step < best) {
+			best = step;
+		}
+	}
+
+	return(best);
+}
 /// <summary>How many of the enemy are on the field, which is what the run is measured in.</summary>
 int SurvivorsClass::Enemies_On_Field(void) const
 {

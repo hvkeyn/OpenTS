@@ -58,6 +58,8 @@ class SurvivorsClass
 			EFFECT_BREATHER,	///< the waves come more slowly
 			EFFECT_REVIVE,		///< the hero survives one death
 			EFFECT_SHIELD,		///< the squad is kept closer and steadier
+			EFFECT_MAGNET,		///< tiberium is pulled in from further off
+			EFFECT_PULL,		///< tiberium flies to the hero faster
 			EFFECT_COUNT
 		};
 
@@ -89,6 +91,7 @@ class SurvivorsClass
 		HouseClass * Enemy_House(void) const;
 		Cell Hero_Cell(void) const;
 		int Enemies_On_Field(void) const;
+		int Nearest_Crystal(void) const;
 
 		void Watch_Foes(void);
 		void Drop_Crystal(Cell const & where, int value);
@@ -100,6 +103,7 @@ class SurvivorsClass
 		void Start_Task(void);
 		void Watch_Task(void);
 		void Draw_Task(Surface & surface);
+		void Draw_Crystals(Surface & surface);
 
 		void Draw_Choices(Surface & surface);
 		void Draw_Stage(Surface & surface);
@@ -138,6 +142,8 @@ class SurvivorsClass
 		int CardPick;
 		int CardTimer;
 		int StatusTimer;
+		int MagnetRadius;			///< how far the hero pulls tiberium in
+		int PullStep;				///< how fast it comes
 		int LastWave;
 		bool TaskActive;			///< a bonus task is on the map
 		Cell TaskCell;				///< where it has to be held
