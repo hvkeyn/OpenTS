@@ -142,6 +142,7 @@ class SurvivorsClass
 		int CardPick;
 		int CardTimer;
 		int StatusTimer;
+		int PhaseTimer;
 		int MagnetRadius;			///< how far the hero pulls tiberium in
 		int PullStep;				///< how fast it comes
 		int LastWave;

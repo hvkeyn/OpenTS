@@ -138,6 +138,7 @@ SurvivorsClass::SurvivorsClass(void) :
 	CardPick(0),
 	CardTimer(0),
 	LastWave(LAST_WAVE),
+	PhaseTimer(0),
 	MagnetRadius(12),
 	PullStep(1),
 	TaskActive(false),
@@ -965,6 +966,7 @@ void SurvivorsClass::Start_Task(void)
 	Cell here = Hero_Cell();
 
 	MagnetRadius = 12;
+	PhaseTimer = 0;
 	PullStep = 1;
 	TaskActive = false;
 	TaskCell = CELL_NONE;
@@ -1098,6 +1100,7 @@ void SurvivorsClass::Logic(void)
 			Begin();
 		} else {
 			Phase = PHASE_SIDE;
+			PhaseTimer = 2 * TICKS_PER_SECOND;
 			DebugString("Survivors: waiting for the side to be picked\n");
 		}
 		return;
@@ -1125,6 +1128,7 @@ void SurvivorsClass::Logic(void)
 	 *	begun and the checks below have nothing to look at.
 	 */
 	if (Phase != PHASE_WAVE && Phase != PHASE_EVAC) {
+		if (PhaseTimer > 0) PhaseTimer--;
 		return;
 	}
 
@@ -1499,6 +1503,7 @@ bool SurvivorsClass::Choose(int index)
 		SideIndex = index;
 		HeroIndex = 0;
 		Phase = PHASE_HERO;
+		PhaseTimer = TICKS_PER_SECOND;
 		DebugString("Survivors: side %s picked\n", SIDE_NAMES[SideIndex]);
 		return(true);
 	}
@@ -1509,6 +1514,7 @@ bool SurvivorsClass::Choose(int index)
 		}
 		HeroIndex = index;
 		Phase = PHASE_STAGE;
+		PhaseTimer = TICKS_PER_SECOND;
 		DebugString("Survivors: hero %s picked\n", SIDE_HEROES[SideIndex][HeroIndex].Name);
 		return(true);
 	}
@@ -1578,6 +1584,7 @@ bool SurvivorsClass::Click(Point2D const & screen)
 	}
 
 	if (Phase == PHASE_STAGE) {
+		if (PhaseTimer > 0) return(true);
 		Begin();
 		return(true);
 	}
@@ -1596,6 +1603,10 @@ bool SurvivorsClass::Click(Point2D const & screen)
 
 	if (Phase != PHASE_SIDE && Phase != PHASE_HERO) {
 		return(false);
+	}
+
+	if (PhaseTimer > 0) {
+		return(true);
 	}
 
 	int count = (Phase == PHASE_SIDE) ? 3 : SIDE_HERO_COUNT[SideIndex];
