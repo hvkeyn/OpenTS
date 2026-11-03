@@ -58,6 +58,7 @@
 #include "rules.h"
 #include "savestream.h"
 #include "superpanel.h"
+#include "survivors.h"
 #include "suprtype.h"
 #include "surface.h"
 #include "tactical.h"
@@ -648,6 +649,11 @@ void ScrollClass::Message_Handler(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 			if (IsMouseDown == false) {
 
 				POINTS pts = MAKEPOINTS(lParam);
+
+				// the survival mode's own cards take their clicks before the battlefield does
+				if (Survivors.Click(Point2D(pts.x, pts.y))) {
+					break;
+				}
 
 				// the super power strip takes its clicks before the battlefield does: a square
 				// starts aiming, and the click that follows picks the place the ability lands on,
