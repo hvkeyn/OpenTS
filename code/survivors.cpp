@@ -135,6 +135,11 @@ SurvivorsClass::SurvivorsClass(void) :
 	CardPick(0),
 	CardTimer(0),
 	LastWave(LAST_WAVE),
+	TaskActive(false),
+	TaskCell(CELL_NONE),
+	TaskHeld(0),
+	TaskLeft(0),
+	TaskAway(0),
 	BossEvery(5),
 	StatusTimer(0),
 	BossPending(0),
@@ -412,6 +417,7 @@ bool SurvivorsClass::Begin(void)
 	Level = 1;
 
 	Spawn_Squad();
+	Start_Task();
 
 	DebugString("Survivors: the run begins at %d,%d under %s with %d in the squad (%s), the enemy is %s\n",
 		origin.X, origin.Y,
@@ -907,6 +913,120 @@ void SurvivorsClass::Start_Evacuation(void)
 }
 
 
+/// <summary>
+/// Sets a bonus task on the map: a piece of ground the hero has to hold for a while. Holding it
+/// to the end hands him a level, which is the reward the card table then turns into a choice.
+/// </summary>
+void SurvivorsClass::Start_Task(void)
+{
+	Cell here = Hero_Cell();
+
+	TaskActive = false;
+	TaskCell = CELL_NONE;
+	TaskHeld = 0;
+	TaskAway = 0;
+	TaskLeft = 45 * TICKS_PER_SECOND;
+
+	for (int tries = 0; tries < 60; tries++) {
+		Cell spot = Cell(Map.PlayRect.X + Random_Pick(4, Map.PlayRect.Width - 4),
+			Map.PlayRect.Y + Random_Pick(4, Map.PlayRect.Height - 4));
+
+		if (!Map.In_Local_Radar(spot)) {
+			continue;
+		}
+
+		int dx = spot.X - here.X;
+		int dy = spot.Y - here.Y;
+		int distance = dx * dx + dy * dy;
+		if (distance < 10 * 10 || distance > 30 * 30) {
+			continue;
+		}
+
+		TaskCell = spot;
+		TaskActive = true;
+		break;
+	}
+
+	if (!TaskActive) {
+		TaskCell = Cell(here.X + 8, here.Y + 8);
+		TaskActive = true;
+	}
+
+	/*
+	 * **	A run started by itself cannot walk to the ground and hold it, so the task is put where
+	 *	the hero stands and made short: the paying path is walked by the tests as well.
+	 */
+	if (AutoPick) {
+		TaskCell = here;
+		TaskLeft = 3 * TICKS_PER_SECOND;
+	}
+
+	DebugString("Survivors: a task stands at %d,%d\n", TaskCell.X, TaskCell.Y);
+}
+
+
+/// <summary>Watches the task: time inside the ground counts, time away for too long loses it.</summary>
+void SurvivorsClass::Watch_Task(void)
+{
+	if (!TaskActive || Hero == NULL || !Hero_Alive()) {
+		return;
+	}
+
+	Cell here = Hero->Center_Coord().As_Cell();
+	int dx = here.X - TaskCell.X;
+	int dy = here.Y - TaskCell.Y;
+	if (dx < 0) dx = -dx;
+	if (dy < 0) dy = -dy;
+
+	if (dx <= 3 && dy <= 3) {
+		TaskHeld++;
+		TaskAway = 0;
+
+		if (TaskHeld >= TaskLeft) {
+			TaskActive = false;
+			Xp += XpNeeded;
+			DebugString("Survivors: the task was held, the level is paid\n");
+			Open_Cards();
+		}
+	} else {
+		if (++TaskAway > 5 * TICKS_PER_SECOND) {
+			TaskActive = false;
+			DebugString("Survivors: the task was left for too long\n");
+		}
+	}
+}
+
+
+/// <summary>Draws where the task ground is and how much of it has been held.</summary>
+void SurvivorsClass::Draw_Task(Surface & surface)
+{
+	if (!TaskActive) {
+		return;
+	}
+
+	Rect whole(0, 0, surface.Get_Width(), surface.Get_Height());
+	char text[192];
+
+	Cell here = Hero_Cell();
+	int dx = TaskCell.X - here.X;
+	int dy = TaskCell.Y - here.Y;
+	int seconds = (TaskLeft - TaskHeld) / TICKS_PER_SECOND;
+	if (seconds < 0) seconds = 0;
+
+	snprintf(text, sizeof(text), "Задание: удержать %d,%d  (от вас %d,%d)  %d с",
+		TaskCell.X, TaskCell.Y, dx, dy, seconds);
+
+	Fancy_Text_Print(text, surface, whole, Point2D(FrameW / 2, FrameH / 3),
+		Fetch_Scheme_By_Name("Green"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	if (TaskAway > TICKS_PER_SECOND) {
+		snprintf(text, sizeof(text), "Вернитесь в зону: %d", 5 - TaskAway / TICKS_PER_SECOND);
+		Fancy_Text_Print(text, surface, whole, Point2D(FrameW / 2, FrameH / 3 + FrameH / 24),
+			Fetch_Scheme_By_Name("LightGrey"), TBLACK,
+			TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+	}
+}
 /// <summary>Ends the run and says why.</summary>
 void SurvivorsClass::Finish(char const * reason)
 {
@@ -1001,6 +1121,7 @@ void SurvivorsClass::Logic(void)
 	}
 
 	Collect_Crystals();
+	Watch_Task();
 
 	Cell here = Hero->Center_Coord().As_Cell();
 
@@ -1296,8 +1417,9 @@ void SurvivorsClass::Draw_On_Field(Surface & surface)
 			Draw_Run_Line(surface);
 			if (Phase == PHASE_EVAC) {
 				Draw_Evacuation(surface);
+			} else {
+				Draw_Task(surface);
 			}
-			break;
 	}
 }
 

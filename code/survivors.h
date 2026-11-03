@@ -97,6 +97,9 @@ class SurvivorsClass
 		void Apply_Card(int index);
 		void Mend(void);
 		void Start_Evacuation(void);
+		void Start_Task(void);
+		void Watch_Task(void);
+		void Draw_Task(Surface & surface);
 
 		void Draw_Choices(Surface & surface);
 		void Draw_Stage(Surface & surface);
@@ -136,6 +139,11 @@ class SurvivorsClass
 		int CardTimer;
 		int StatusTimer;
 		int LastWave;
+		bool TaskActive;			///< a bonus task is on the map
+		Cell TaskCell;				///< where it has to be held
+		int TaskHeld;				///< ticks spent inside the zone
+		int TaskLeft;				///< ticks the zone has to be held for
+		int TaskAway;				///< ticks spent outside it since the last look
 		int BossEvery;			///< which card the player took, for the record
 		int BossPending;		///< a boss is due on this wave
 		int EvacTimer;			///< ticks left to reach the way out
