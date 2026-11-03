@@ -278,6 +278,13 @@ RestateButtonStruct _buttons[BUTTON_COUNT] = {
  *=============================================================================================*/
 void Restate_Mission(ScenarioClass * scen)
 {
+	// A test asks the mission to start at once; the briefing would wait for a reader.
+	if (getenv("TS_SKIP_BRIEFING") != NULL) {
+		DebugString("Restate: the briefing is skipped on request\n");
+		Keyboard->Clear();
+		return;
+	}
+
 	bool save_started = ScenarioActive;
 	ScenarioActive = false;
 	if (RestateMission().Presentation(scen) == true) {
