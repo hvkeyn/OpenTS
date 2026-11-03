@@ -62,6 +62,7 @@
 #include "scenario.h"
 
 #include "superpanel.h"
+#include "survivors.h"
 
 #include "_bench.h"
 #include "_deploymentconfig.h"
@@ -2857,6 +2858,11 @@ ScenarioState Read_Scenario_INI(CCINIClass const & ini, bool is_mapgen)
 	*/
 	SuperPanel.Read_INI(ini);
 	SuperPanel.Reset();
+
+	/*
+	**	A map that carries a [Survivors] section is played as the survival mode.
+	*/
+	Survivors.Read_INI(ini);
 
 	if (!Map.Read_INI(ini)) {
 		return(ScenarioState::TerrainDamaged);

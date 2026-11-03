@@ -1,0 +1,9 @@
+# The game's own data files are read by the engine byte for byte: a line ending must not be
+# rewritten under them, whatever a checkout's platform would normally do.
+*.map -text
+*.MAP -text
+*.MIX -text
+*.SHP -text
+*.PCX -text
+*.INI -text
+*.fnt -text

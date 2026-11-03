@@ -66,6 +66,7 @@
 #include "scenario.h"
 #include "session.h"
 #include "superpanel.h"
+#include "survivors.h"
 #include "tactical.h"
 #include "tag.h"
 #include "terrain.h"
@@ -236,6 +237,9 @@ void LogicClass::AI(void)
 	// the super power strip is charged from here, which is the game's own frame rate and
 	// not the rate the screen happens to be drawn at
 	SuperPanel.Logic();
+
+	// the survival mode keeps its own clock on the same beat: the waves, the squad and the hero
+	Survivors.Logic();
 
 	FramesThisSecond++;
 
