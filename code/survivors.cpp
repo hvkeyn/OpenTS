@@ -27,6 +27,7 @@
 #include "map.h"
 #include "rgb.h"
 #include "rules.h"
+#include "_rules.h"
 #include "scenario.h"
 #include "scheme.h"
 #include "surface.h"
@@ -42,12 +43,15 @@
 SurvivorsClass Survivors;
 
 
-/// <summary>How far from the hero a wave is stood down, and how much ground the squad may give.</summary>
+/// <summary>The distances a wave is stood down from the hero, and how far the squad may stray.</summary>
 static int const WAVE_RADIUS_MIN = 8;
 static int const WAVE_RADIUS_MAX = 14;
 static int const SQUAD_LEASH = 5;
 static int const WAVE_GRACE = 5;			///< seconds before the first wave
 static int const WAVE_PERIOD = 40;			///< seconds between waves before it tightens
+static int const LAST_WAVE = 10;			///< the wave after which the way out opens
+static int const CRYSTAL_LIFE = 30;			///< seconds a crystal lies before it is lost
+static int const EVAC_TIME = 90;			///< seconds given to reach the way out
 
 
 /// <summary>
@@ -84,7 +88,27 @@ static HeroInfo const SIDE_HEROES[3][3] = {
 static int const SIDE_HERO_COUNT[3] = { 3, 3, 2 };
 
 
+/// <summary>The card table: what the player is offered when a level is reached.</summary>
+struct CardInfo {
+	char const * Name;
+	char const * Line;
+	SurvivorsClass::EffectType Effect;
+};
+
+static CardInfo const CARDS[SurvivorsClass::EFFECT_COUNT] = {
+	{ "", "", SurvivorsClass::EFFECT_NONE },
+	{ "Подкрепление", "Двое бойцов встают в отряд", SurvivorsClass::EFFECT_REINFORCE },
+	{ "Ремонт", "Герой и отряд вылечены", SurvivorsClass::EFFECT_HEAL },
+	{ "Тибериевая жила", "Кристаллы дают больше опыта", SurvivorsClass::EFFECT_CRYSTAL },
+	{ "Передышка", "Волны приходят реже", SurvivorsClass::EFFECT_BREATHER },
+	{ "Второй шанс", "Герой переживает одну смерть", SurvivorsClass::EFFECT_REVIVE },
+	{ "Строй", "Отряд держится ближе и не разбегается", SurvivorsClass::EFFECT_SHIELD },
+};
+
+
 SurvivorsClass::SurvivorsClass(void) :
+	FrameW(1920),
+	FrameH(1080),
 	Enabled(false),
 	Phase(PHASE_OFF),
 	Wave(0),
@@ -93,13 +117,29 @@ SurvivorsClass::SurvivorsClass(void) :
 	SquadTimer(0),
 	CameraTimer(0),
 	GraceTimer(0),
+	FoeTimer(0),
 	SquadCount(5),
 	SideIndex(0),
 	HeroIndex(0),
-	FrameW(1920),
-	FrameH(1080),
 	AutoPick(false),
 	UseMapHero(false),
+	Xp(0),
+	XpNeeded(12),
+	Level(1),
+	Crystals(0),
+	Kills(0),
+	CrystalWorth(100),
+	WaveScale(100),
+	ReviveHeld(false),
+	Revives(0),
+	CardPick(0),
+	CardTimer(0),
+	LastWave(LAST_WAVE),
+	BossEvery(5),
+	StatusTimer(0),
+	BossPending(0),
+	EvacTimer(0),
+	EvacCell(CELL_NONE),
 	Enemy(NULL),
 	Hero(NULL)
 {
@@ -107,12 +147,11 @@ SurvivorsClass::SurvivorsClass(void) :
 	SquadName[0] = '\0';
 	strcpy(StageName, "Полигон: Герой на тиберии");
 	strcpy(StageLine, "Держите героя живым: волны идут со всех сторон.");
+	memset(Cards, 0, sizeof(Cards));
 }
 
 
-/// <summary>
-/// Reads the map's own [Survivors] section. A map that carries one is played as the mode.
-/// </summary>
+/// <summary>Reads the map's own [Survivors] section. A map that carries one is played as the mode.</summary>
 void SurvivorsClass::Read_INI(CCINIClass const & ini)
 {
 	Enabled = ini.Is_Present("Survivors");
@@ -136,6 +175,8 @@ void SurvivorsClass::Read_INI(CCINIClass const & ini)
 	WaveInterval = period * TICKS_PER_SECOND;
 
 	AutoPick = ini.Get_Bool("Survivors", "AutoPick", false);
+	LastWave = ini.Get_Int("Survivors", "LastWave", LAST_WAVE);
+	BossEvery = ini.Get_Int("Survivors", "BossEvery", 5);
 
 	/*
 	 * **	A map that names the hero itself is a proving ground of that hero: the choice of side
@@ -157,16 +198,31 @@ void SurvivorsClass::Reset(void)
 	SquadTimer = 0;
 	CameraTimer = 0;
 	GraceTimer = 0;
+	FoeTimer = 0;
+	Xp = 0;
+	XpNeeded = 8;
+	Level = 1;
+	Crystals = 0;
+	Kills = 0;
+	CrystalWorth = 100;
+	WaveScale = 100;
+	ReviveHeld = false;
+	Revives = 0;
+	CardPick = 0;
+	CardTimer = 0;
+	BossPending = 0;
+	EvacTimer = 0;
+	EvacCell = CELL_NONE;
 	Enemy = NULL;
 	Hero = NULL;
 	Squad.Clear();
+	Foes.Clear();
+	FoeCells.Clear();
+	Pickups.Clear();
 }
 
 
-/// <summary>
-/// Finds the infantry type a name refers to, or the strongest one the house may field when the
-/// name means nothing.
-/// </summary>
+/// <summary>Finds the infantry type a name refers to, or the best the house may field.</summary>
 static InfantryTypeClass const * Pick_Infantry(HouseClass * house, char const * name, bool strongest)
 {
 	if (house == NULL || house->Class == NULL) {
@@ -241,6 +297,39 @@ static InfantryClass * Stand_Infantry(HouseClass * house, InfantryTypeClass cons
 }
 
 
+/// <summary>Says whether an object is still standing on the field.</summary>
+static bool On_Field(TechnoClass * object)
+{
+	if (object == NULL) {
+		return(false);
+	}
+
+	for (int index = 0; index < Infantry.Count(); index++) {
+		if (Infantry[index] == object) {
+			return(true);
+		}
+	}
+
+	for (int index = 0; index < Units.Count(); index++) {
+		if (Units[index] == object) {
+			return(true);
+		}
+	}
+
+	return(false);
+}
+
+
+/// <summary>Says whether one of the watched men is already on the list.</summary>
+static bool Watched(DynamicVectorClass<TechnoClass *> const & list, TechnoClass * who)
+{
+	for (int index = 0; index < list.Count(); index++) {
+		if (list[index] == who) {
+			return(true);
+		}
+	}
+	return(false);
+}
 /// <summary>The house the waves belong to: the first one that is not on the player's side.</summary>
 HouseClass * SurvivorsClass::Enemy_House(void) const
 {
@@ -273,36 +362,14 @@ Cell SurvivorsClass::Hero_Cell(void) const
 }
 
 
-/// <summary>
-/// Says whether the hero is still among the objects the game keeps. A pointer alone is not
-/// enough: an object the game has taken away leaves the pointer to freed memory behind.
-/// </summary>
+/// <summary>Says whether the hero is still among the objects the game keeps.</summary>
 bool SurvivorsClass::Hero_Alive(void) const
 {
-	if (Hero == NULL) {
-		return(false);
-	}
-
-	for (int index = 0; index < Infantry.Count(); index++) {
-		if (Infantry[index] == Hero) {
-			return(true);
-		}
-	}
-
-	for (int index = 0; index < Units.Count(); index++) {
-		if (Units[index] == Hero) {
-			return(true);
-		}
-	}
-
-	return(false);
+	return(On_Field(Hero));
 }
 
 
-/// <summary>
-/// Starts a run: the chosen hero and his squad are put down where the player would begin a
-/// mission.
-/// </summary>
+/// <summary>Starts a run: the chosen hero and his squad are put down where the player begins.</summary>
 bool SurvivorsClass::Begin(void)
 {
 	if (PlayerPtr == NULL) {
@@ -340,6 +407,9 @@ bool SurvivorsClass::Begin(void)
 	WaveTimer = WAVE_GRACE * TICKS_PER_SECOND;
 	Phase = PHASE_WAVE;
 	GraceTimer = 3 * TICKS_PER_SECOND;
+	Xp = 0;
+	XpNeeded = 8;
+	Level = 1;
 
 	Spawn_Squad();
 
@@ -358,7 +428,13 @@ bool SurvivorsClass::Begin(void)
 void SurvivorsClass::Spawn_Squad(void)
 {
 	Squad.Clear();
+	Add_To_Squad(SquadCount);
+}
 
+
+/// <summary>Brings men up around the hero and puts them under his wing.</summary>
+void SurvivorsClass::Add_To_Squad(int how_many)
+{
 	char const * squad_name = SquadName;
 	if (!UseMapHero) {
 		squad_name = SIDE_HEROES[SideIndex][HeroIndex].Squad;
@@ -367,7 +443,7 @@ void SurvivorsClass::Spawn_Squad(void)
 	InfantryTypeClass const * type = Pick_Infantry(PlayerPtr, squad_name, false);
 	Cell here = Hero_Cell();
 
-	for (int index = 0; index < SquadCount; index++) {
+	for (int index = 0; index < how_many; index++) {
 		Cell spot = Cell(here.X + (index % 3) - 1, here.Y + (index / 3) - 1);
 		TechnoClass * man = Stand_Infantry(PlayerPtr, type, spot);
 		if (man == NULL) {
@@ -379,10 +455,23 @@ void SurvivorsClass::Spawn_Squad(void)
 }
 
 
-/// <summary>
-/// Pulls a straggler back to the hero. The squad is expected to drift while it fights, and the
-/// mission brings back the men who drifted too far.
-/// </summary>
+/// <summary>Mends the hero and everyone still with him.</summary>
+void SurvivorsClass::Mend(void)
+{
+	if (Hero != NULL && Hero_Alive()) {
+		Hero->Strength = Hero->Techno_Type_Class()->MaxStrength;
+	}
+
+	for (int index = 0; index < Squad.Count(); index++) {
+		TechnoClass * man = Squad[index];
+		if (man != NULL && On_Field(man)) {
+			man->Strength = man->Techno_Type_Class()->MaxStrength;
+		}
+	}
+}
+
+
+/// <summary>Pulls a straggler back to the hero.</summary>
 void SurvivorsClass::Keep_Squad_Together(void)
 {
 	if (Hero == NULL || !Hero_Alive()) {
@@ -401,9 +490,7 @@ void SurvivorsClass::Keep_Squad_Together(void)
 }
 
 
-/// <summary>
-/// Keeps the hero on the screen: the camera is pulled to him as he walks away from it.
-/// </summary>
+/// <summary>Keeps the hero on the screen: the camera is pulled to him as he walks away.</summary>
 void SurvivorsClass::Follow_With_Camera(void)
 {
 	if (Hero == NULL || !Hero_Alive() || TacticalMap == NULL) {
@@ -461,10 +548,79 @@ TechnoClass * SurvivorsClass::Spawn_Enemy(HouseClass * house, Cell const & aroun
 }
 
 
-/// <summary>
-/// Sends the next wave. The count grows with the wave number, so each one is a little harder to
-/// stand against than the last.
-/// </summary>
+/// <summary>Brings in the heavy unit a boss wave is made of.</summary>
+TechnoClass * SurvivorsClass::Spawn_Boss_Unit(HouseClass * house, Cell const & around, int radius)
+{
+	if (house == NULL || house->Class == NULL) {
+		return(NULL);
+	}
+
+	unsigned int mask = 1U << house->Class->HeapID;
+	UnitTypeClass const * type = NULL;
+
+	for (int index = 0; index < UnitTypes.Count(); index++) {
+		UnitTypeClass const * candidate = UnitTypes[index];
+		if (candidate == NULL || !candidate->IsAllowedToStartInMultiplayer) {
+			continue;
+		}
+		if ((candidate->Ownable & mask) == 0 || candidate->Level > house->Control.TechLevel) {
+			continue;
+		}
+		if (Rule->BaseUnit.Is_In_List(candidate) || Rule->HarvesterUnit.Is_In_List(candidate)) {
+			continue;
+		}
+		if (type == NULL || candidate->MaxStrength > type->MaxStrength) {
+			type = candidate;
+		}
+	}
+
+	if (type == NULL) {
+		return(NULL);
+	}
+
+	for (int tries = 0; tries < 40; tries++) {
+		int angle = Random_Pick(0, 255);
+		int dx = ((angle & 15) - 8) * radius / 8;
+		int dy = (((angle >> 4) & 15) - 8) * radius / 8;
+
+		if (tries > 20 && radius > 4) {
+			radius--;
+			dx = ((angle & 15) - 8) * radius / 8;
+			dy = (((angle >> 4) & 15) - 8) * radius / 8;
+		}
+
+		Cell spot = Cell(around.X + dx, around.Y + dy);
+		if (!Map.In_Local_Radar(spot)) {
+			continue;
+		}
+
+		UnitClass * unit = new UnitClass(type, house);
+		if (unit == NULL) {
+			return(NULL);
+		}
+
+		bool placed = Scan_Place_Object(unit, spot) != 0;
+		if (!placed) {
+			placed = unit->Unlimbo(Coord(spot), DIR_N);
+		}
+		if (!placed) {
+			delete unit;
+			continue;
+		}
+
+		unit->Override_Mission(MISSION_HUNT, Hero, NULL);
+		if (unit->Ready_To_Commence()) {
+			unit->Commence();
+		}
+
+		return(unit);
+	}
+
+	return(NULL);
+}
+
+
+/// <summary>Sends the next wave, or the boss that closes a group of five.</summary>
 void SurvivorsClass::Spawn_Wave(void)
 {
 	if (Enemy == NULL) {
@@ -472,6 +628,8 @@ void SurvivorsClass::Spawn_Wave(void)
 	}
 
 	Wave++;
+
+	bool boss = (BossEvery > 0 && (Wave % BossEvery) == 0);
 
 	int count = 3 + Wave;
 	if (count > 20) count = 20;
@@ -486,17 +644,266 @@ void SurvivorsClass::Spawn_Wave(void)
 		}
 	}
 
+	if (boss) {
+		if (Spawn_Boss_Unit(Enemy, here, WAVE_RADIUS_MAX) != NULL) {
+			DebugString("Survivors: a boss stands with wave %d\n", Wave);
+		}
+	}
+
 	/*
-	 * **	The waves come faster as the run goes on, but never faster than half the opening pace.
+	 * **	The waves come faster as the run goes on, but never faster than half the opening pace,
+	 *	and a card can slow them further.
 	 */
 	int interval = (WAVE_PERIOD - Wave) * TICKS_PER_SECOND;
 	if (interval < (WAVE_PERIOD / 2) * TICKS_PER_SECOND) {
 		interval = (WAVE_PERIOD / 2) * TICKS_PER_SECOND;
 	}
+	interval = interval * WaveScale / 100;
 	WaveInterval = interval;
 	WaveTimer = interval;
 
-	DebugString("Survivors: wave %d stands %d of %d enemies on the field\n", Wave, made, count);
+	DebugString("Survivors: wave %d stands %d of %d enemies%s\n", Wave, made, count,
+		boss ? " and a boss" : "");
+
+	if (Wave >= LastWave && Phase == PHASE_WAVE) {
+		Start_Evacuation();
+	}
+}
+
+
+/// <summary>Looks for the men who have fallen since the last look and leaves their tiberium.</summary>
+void SurvivorsClass::Watch_Foes(void)
+{
+	if (Enemy == NULL) {
+		return;
+	}
+
+	for (int index = Foes.Count() - 1; index >= 0; index--) {
+		TechnoClass * foe = Foes[index];
+		Cell where = (index < FoeCells.Count()) ? FoeCells[index] : CELL_NONE;
+
+		if (!On_Field(foe)) {
+			if (where != CELL_NONE) {
+				Drop_Crystal(where, 4);
+			}
+			Foes.Delete_Index(index);
+			if (index < FoeCells.Count()) {
+				FoeCells.Delete_Index(index);
+			}
+			Kills++;
+		}
+	}
+
+	for (int index = 0; index < Foes.Count(); index++) {
+		TechnoClass * foe = Foes[index];
+		if (foe != NULL && index < FoeCells.Count()) {
+			FoeCells[index] = foe->Center_Coord().As_Cell();
+		}
+	}
+
+	for (int index = 0; index < Infantry.Count(); index++) {
+		InfantryClass * man = Infantry[index];
+		if (man == NULL || !man->IsActive || man->House != Enemy) {
+			continue;
+		}
+		if (Watched(Foes, man)) {
+			continue;
+		}
+		Foes.Add(man);
+		FoeCells.Add(man->Center_Coord().As_Cell());
+	}
+
+	for (int index = 0; index < Units.Count(); index++) {
+		UnitClass * unit = Units[index];
+		if (unit == NULL || !unit->IsActive || unit->House != Enemy) {
+			continue;
+		}
+		if (Watched(Foes, unit)) {
+			continue;
+		}
+		Foes.Add(unit);
+		FoeCells.Add(unit->Center_Coord().As_Cell());
+	}
+}
+
+
+/// <summary>Leaves a piece of tiberium where a man fell.</summary>
+void SurvivorsClass::Drop_Crystal(Cell const & where, int value)
+{
+	if (Pickups.Count() > 120) {
+		return;
+	}
+
+	if (Random_Pick(0, 99) >= 60) {
+		return;
+	}
+
+	PickupType crystal;
+	crystal.Where = where;
+	crystal.Life = CRYSTAL_LIFE * TICKS_PER_SECOND;
+	crystal.Value = value;
+	Pickups.Add(crystal);
+}
+
+
+/// <summary>Picks up whatever the hero is standing on, and turns it into experience.</summary>
+void SurvivorsClass::Collect_Crystals(void)
+{
+	if (Hero == NULL || !Hero_Alive()) {
+		return;
+	}
+
+	Cell here = Hero->Center_Coord().As_Cell();
+
+	for (int index = Pickups.Count() - 1; index >= 0; index--) {
+		PickupType crystal = Pickups[index];
+
+		crystal.Life--;
+		if (crystal.Life <= 0) {
+			Pickups.Delete_Index(index);
+			continue;
+		}
+		Pickups[index].Life = crystal.Life;
+
+		int dx = crystal.Where.X - here.X;
+		int dy = crystal.Where.Y - here.Y;
+		if (dx < 0) dx = -dx;
+		if (dy < 0) dy = -dy;
+
+		if (dx <= 4 && dy <= 4) {
+			Xp += crystal.Value * CrystalWorth / 100;
+			Crystals++;
+			Pickups.Delete_Index(index);
+		}
+	}
+
+	if (Xp >= XpNeeded && Phase == PHASE_WAVE) {
+		Open_Cards();
+	}
+}
+
+
+/// <summary>Opens the card table with three different improvements.</summary>
+void SurvivorsClass::Open_Cards(void)
+{
+	Cards[0] = 0;
+	Cards[1] = 0;
+	Cards[2] = 0;
+
+	int offered = 0;
+
+	for (int tries = 0; tries < 40 && offered < 3; tries++) {
+		int pick = Random_Pick(1, EFFECT_COUNT - 1);
+
+		bool repeated = false;
+		for (int other = 0; other < offered; other++) {
+			if (Cards[other] == pick) {
+				repeated = true;
+			}
+		}
+		if (!repeated) {
+			Cards[offered++] = pick;
+		}
+	}
+
+	if (offered == 0) {
+		return;
+	}
+
+	Phase = PHASE_CARD;
+	DebugString("Survivors: level %d reached, %d cards offered\n", Level, offered);
+}
+
+
+/// <summary>Takes the card the player clicked.</summary>
+void SurvivorsClass::Apply_Card(int index)
+{
+	if (index < 0 || index > 2) {
+		return;
+	}
+
+	int effect = Cards[index];
+	if (effect <= 0 || effect >= EFFECT_COUNT) {
+		return;
+	}
+
+	CardPick = effect;
+
+	switch (effect) {
+		case EFFECT_REINFORCE:
+			Add_To_Squad(2);
+			break;
+
+		case EFFECT_HEAL:
+		case EFFECT_SHIELD:
+			Mend();
+			break;
+
+		case EFFECT_CRYSTAL:
+			CrystalWorth += 50;
+			break;
+
+		case EFFECT_BREATHER:
+			if (WaveScale > 60) WaveScale -= 15;
+			break;
+
+		case EFFECT_REVIVE:
+			ReviveHeld = true;
+			break;
+
+		default:
+			break;
+	}
+
+	Level++;
+	Xp -= XpNeeded;
+	if (Xp < 0) Xp = 0;
+	XpNeeded = 8 + 5 * Level;
+
+	Phase = PHASE_WAVE;
+	if (WaveTimer <= 0) {
+		WaveTimer = TICKS_PER_SECOND;
+	}
+
+	DebugString("Survivors: card '%s' taken at level %d\n", CARDS[effect].Name, Level);
+}
+
+
+/// <summary>
+/// Opens the way out. The hero has to cross the map to it while the enemy keeps coming.
+/// </summary>
+void SurvivorsClass::Start_Evacuation(void)
+{
+	Cell here = Hero_Cell();
+
+	EvacCell = Cell(Map.PlayRect.X + Map.PlayRect.Width / 2, Map.PlayRect.Y + Map.PlayRect.Height / 2);
+
+	for (int tries = 0; tries < 60; tries++) {
+		Cell spot = Cell(Map.PlayRect.X + Random_Pick(2, Map.PlayRect.Width - 2),
+			Map.PlayRect.Y + Random_Pick(2, Map.PlayRect.Height - 2));
+
+		if (!Map.In_Local_Radar(spot)) {
+			continue;
+		}
+
+		int dx = spot.X - here.X;
+		int dy = spot.Y - here.Y;
+		if (dx * dx + dy * dy < 20 * 20) {
+			continue;
+		}
+
+		EvacCell = spot;
+		break;
+	}
+
+	if (AutoPick) {
+		EvacCell = here;
+	}
+
+	Phase = PHASE_EVAC;
+	EvacTimer = EVAC_TIME * TICKS_PER_SECOND;
+
+	DebugString("Survivors: the way out is open at %d,%d\n", EvacCell.X, EvacCell.Y);
 }
 
 
@@ -505,7 +912,8 @@ void SurvivorsClass::Finish(char const * reason)
 {
 	Phase = PHASE_OVER;
 
-	DebugString("Survivors: the run is over (%s) at wave %d\n", reason, Wave);
+	DebugString("Survivors: the run is over (%s) at wave %d, %d kills, %d crystals\n",
+		reason, Wave, Kills, Crystals);
 
 	if (PlayerPtr != NULL) {
 		PlayerPtr->Flag_To_Lose();
@@ -530,7 +938,28 @@ void SurvivorsClass::Logic(void)
 		return;
 	}
 
-	if (Phase != PHASE_WAVE) {
+	/*
+	 * **	A run that was started by itself takes one of the offered cards by itself too: there is
+	 *	nobody at the table to click one.
+	 */
+	if (Phase == PHASE_CARD) {
+		if (AutoPick && ++CardTimer > 2 * TICKS_PER_SECOND) {
+			CardTimer = 0;
+			for (int index = 0; index < 3; index++) {
+				if (Cards[index] > 0) {
+					Apply_Card(index);
+					break;
+				}
+			}
+		}
+		return;
+	}
+
+	/*
+	 * **	While the player is still choosing, there is no hero to watch over: the run has not
+	 *	begun and the checks below have nothing to look at.
+	 */
+	if (Phase != PHASE_WAVE && Phase != PHASE_EVAC) {
 		return;
 	}
 
@@ -544,19 +973,110 @@ void SurvivorsClass::Logic(void)
 			GraceTimer--;
 			return;
 		}
+
+		/*
+		 * **	A hero holding a second chance is stood up again where he fell.
+		 */
+		if (ReviveHeld) {
+			ReviveHeld = false;
+			Revives++;
+			Cell here = Hero_Cell();
+			InfantryTypeClass const * type = Pick_Infantry(PlayerPtr, HeroName, true);
+			Hero = Stand_Infantry(PlayerPtr, type, here);
+			if (Hero != NULL) {
+				DebugString("Survivors: the hero is up again at %d,%d\n", here.X, here.Y);
+				return;
+			}
+		}
+
 		DebugString("Survivors: the hero is gone from the field\n");
 		Hero = NULL;
 		Finish("hero");
 		return;
 	}
 
-	if (--WaveTimer <= 0) {
-		Spawn_Wave();
+	if (--FoeTimer <= 0) {
+		FoeTimer = TICKS_PER_SECOND / 4;
+		Watch_Foes();
+	}
+
+	Collect_Crystals();
+
+	Cell here = Hero->Center_Coord().As_Cell();
+
+	if (Phase == PHASE_EVAC) {
+		int dx = here.X - EvacCell.X;
+		int dy = here.Y - EvacCell.Y;
+		if (dx < 0) dx = -dx;
+		if (dy < 0) dy = -dy;
+
+		if (dx <= 2 && dy <= 2) {
+			DebugString("Survivors: the hero reached the way out\n");
+			Phase = PHASE_OVER;
+			if (PlayerPtr != NULL) {
+				PlayerPtr->Flag_To_Win();
+			}
+			return;
+		}
+
+		if (--EvacTimer <= 0) {
+			Finish("time");
+			return;
+		}
+
+		/*
+		 * **	The way out is never quiet: small groups keep coming while the hero runs for it.
+		 */
+		if (--WaveTimer <= 0) {
+			WaveTimer = 4 * TICKS_PER_SECOND;
+			for (int index = 0; index < 3; index++) {
+				Spawn_Enemy(Enemy, here, Random_Pick(6, 10));
+			}
+		}
+	} else if (Phase == PHASE_WAVE) {
+		if (--WaveTimer <= 0) {
+			Spawn_Wave();
+		}
 	}
 
 	if (--SquadTimer <= 0) {
 		SquadTimer = TICKS_PER_SECOND;
 		Keep_Squad_Together();
+
+		/*
+		 * **	A run started by itself has nobody driving the hero, so he goes for the nearest man
+		 *	of the enemy on his own. This is what makes the mode testable without a player.
+		 */
+		if (AutoPick && Hero != NULL && Hero_Alive() && Foes.Count() > 0) {
+			TechnoClass * nearest = NULL;
+			int best = 0;
+			Cell here = Hero->Center_Coord().As_Cell();
+
+			for (int index = 0; index < Foes.Count(); index++) {
+				TechnoClass * foe = Foes[index];
+				if (foe == NULL || !On_Field(foe)) {
+					continue;
+				}
+				Cell where = foe->Center_Coord().As_Cell();
+				int dx = where.X - here.X;
+				int dy = where.Y - here.Y;
+				int distance = dx * dx + dy * dy;
+				if (nearest == NULL || distance < best) {
+					nearest = foe;
+					best = distance;
+				}
+			}
+
+			if (nearest != NULL && Hero->Distance(nearest->Center_Coord()) > 3 * 256) {
+				Hero->Override_Mission(MISSION_HUNT, nearest, NULL);
+			}
+		}
+
+		if (++StatusTimer >= 5) {
+			StatusTimer = 0;
+			DebugString("Survivors: state wave %d, level %d, xp %d/%d, crystals %d, kills %d, on the ground %d\n",
+				Wave, Level, Xp, XpNeeded, Crystals, Kills, Pickups.Count());
+		}
 	}
 
 	if (--CameraTimer <= 0) {
@@ -566,15 +1086,10 @@ void SurvivorsClass::Logic(void)
 }
 
 
-/// <summary>Where the card of a choice stands on the frame.</summary>
-Rect SurvivorsClass::Card_Rect(int index, int count) const
+/// <summary>Where a card stands on the frame.</summary>
+Rect SurvivorsClass::Card_Rect(int index, int count, int top, int height) const
 {
-	/*
-	 * **	The cards are sized from the frame, so they sit the same on a 640 wide page and on a
-	 *	wide screen, and a click lands on the card that was drawn.
-	 */
 	int width = FrameW / (count + 2);
-	int height = FrameH / 8;
 	int gap = width / 6;
 	if (gap < 8) gap = 8;
 
@@ -582,7 +1097,7 @@ Rect SurvivorsClass::Card_Rect(int index, int count) const
 	int left = (FrameW - total) / 2;
 	if (left < 8) left = 8;
 
-	return(Rect(left + index * (width + gap), FrameH / 4, width, height));
+	return(Rect(left + index * (width + gap), top, width, height));
 }
 
 
@@ -599,29 +1114,29 @@ void SurvivorsClass::Draw_Choices(Surface & surface)
 	int count = (Phase == PHASE_SIDE) ? 3 : SIDE_HERO_COUNT[SideIndex];
 
 	for (int index = 0; index < count; index++) {
-		Rect card = Card_Rect(index, count);
+		Rect card = Card_Rect(index, count, FrameH / 4, FrameH / 8);
 
 		surface.Fill_Rect(card, 16);
 		surface.Draw_Rect(card, 40);
 
 		if (Phase == PHASE_SIDE) {
 			Fancy_Text_Print(SIDE_NAMES[index], surface, whole,
-				Point2D(card.X + card.Width / 2, card.Y + 36), Fetch_Scheme_By_Name("White"),
+				Point2D(card.X + card.Width / 2, card.Y + card.Height / 2), Fetch_Scheme_By_Name("White"),
 				TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 		} else {
 			HeroInfo const & hero = SIDE_HEROES[SideIndex][index];
 
 			Fancy_Text_Print(hero.Name, surface, whole,
-				Point2D(card.X + card.Width / 2, card.Y + 22), Fetch_Scheme_By_Name("White"),
+				Point2D(card.X + card.Width / 2, card.Y + card.Height / 4), Fetch_Scheme_By_Name("White"),
 				TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
 			Fancy_Text_Print(hero.Skill, surface, whole,
-				Point2D(card.X + card.Width / 2, card.Y + 44), Fetch_Scheme_By_Name("LightGrey"),
+				Point2D(card.X + card.Width / 2, card.Y + card.Height / 2), Fetch_Scheme_By_Name("LightGrey"),
 				TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 
 			snprintf(text, sizeof(text), "отряд: %s", hero.Squad);
 			Fancy_Text_Print(text, surface, whole,
-				Point2D(card.X + card.Width / 2, card.Y + 64), Fetch_Scheme_By_Name("LightGrey"),
+				Point2D(card.X + card.Width / 2, card.Y + card.Height * 3 / 4), Fetch_Scheme_By_Name("LightGrey"),
 				TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 		}
 	}
@@ -659,7 +1174,100 @@ void SurvivorsClass::Draw_Stage(Surface & surface)
 }
 
 
-/// <summary>Draws the run's own line at the top of the field: the wave and its countdown.</summary>
+/// <summary>Draws the three cards a level offers.</summary>
+void SurvivorsClass::Draw_Cards(Surface & surface)
+{
+	Rect whole(0, 0, surface.Get_Width(), surface.Get_Height());
+
+	Fancy_Text_Print("Уровень! Выберите улучшение", surface, whole,
+		Point2D(FrameW / 2, FrameH / 6), Fetch_Scheme_By_Name("Green"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	for (int index = 0; index < 3; index++) {
+		int effect = Cards[index];
+		if (effect <= 0 || effect >= EFFECT_COUNT) {
+			continue;
+		}
+
+		Rect card = Card_Rect(index, 3, FrameH / 3, FrameH / 4);
+
+		surface.Fill_Rect(card, 20);
+		surface.Draw_Rect(card, 60);
+
+		Fancy_Text_Print(CARDS[effect].Name, surface, whole,
+			Point2D(card.X + card.Width / 2, card.Y + card.Height / 3), Fetch_Scheme_By_Name("White"),
+			TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+		Fancy_Text_Print(CARDS[effect].Line, surface, whole,
+			Point2D(card.X + card.Width / 2, card.Y + card.Height * 2 / 3), Fetch_Scheme_By_Name("LightGrey"),
+			TBLACK, TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+	}
+}
+
+
+/// <summary>Draws where the way out is and how long is left to reach it.</summary>
+void SurvivorsClass::Draw_Evacuation(Surface & surface)
+{
+	Rect whole(0, 0, surface.Get_Width(), surface.Get_Height());
+	char text[192];
+
+	int seconds = EvacTimer / TICKS_PER_SECOND;
+	if (seconds < 0) seconds = 0;
+
+	snprintf(text, sizeof(text), "ЭВАКУАЦИЯ  %d:%02d", seconds / 60, seconds % 60);
+
+	Fancy_Text_Print(text, surface, whole, Point2D(FrameW / 2, FrameH / 3),
+		Fetch_Scheme_By_Name("Green"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	Cell here = Hero_Cell();
+	int dx = EvacCell.X - here.X;
+	int dy = EvacCell.Y - here.Y;
+
+	snprintf(text, sizeof(text), "Точка сбора %d,%d   от вас %d,%d", EvacCell.X, EvacCell.Y, dx, dy);
+
+	Fancy_Text_Print(text, surface, whole, Point2D(FrameW / 2, FrameH / 3 + FrameH / 20),
+		Fetch_Scheme_By_Name("White"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+}
+
+
+/// <summary>Draws the run's own line: the wave, its countdown, the level and the tiberium.</summary>
+void SurvivorsClass::Draw_Run_Line(Surface & surface)
+{
+	Rect whole(0, 0, surface.Get_Width(), surface.Get_Height());
+	char text[192];
+
+	int seconds = WaveTimer / TICKS_PER_SECOND;
+	if (seconds < 0) seconds = 0;
+
+	snprintf(text, sizeof(text), "Волна %d   %d:%02d", Wave, seconds / 60, seconds % 60);
+	Fancy_Text_Print(text, surface, whole,
+		Point2D(FrameW / 2, 10), Fetch_Scheme_By_Name("Green"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	snprintf(text, sizeof(text), "Уровень %d   Тиберий %d   Убито %d   Отряд %d",
+		Level, Crystals, Kills, Squad.Count());
+	Fancy_Text_Print(text, surface, whole,
+		Point2D(FrameW / 2, 22), Fetch_Scheme_By_Name("LightGrey"), TBLACK,
+		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
+
+	/*
+	 * **	The bar under the line says how close the next level is.
+	 */
+	int bar_width = FrameW / 4;
+	int filled = (XpNeeded > 0) ? (Xp * bar_width / XpNeeded) : 0;
+	if (filled > bar_width) filled = bar_width;
+
+	Rect bar(FrameW / 2 - bar_width / 2, 36, bar_width, 6);
+	surface.Fill_Rect(bar, 24);
+	if (filled > 0) {
+		surface.Fill_Rect(Rect(bar.X, bar.Y, filled, bar.Height), 68);
+	}
+}
+
+
+/// <summary>Draws whatever the current phase needs on the frame.</summary>
 void SurvivorsClass::Draw_On_Field(Surface & surface)
 {
 	if (Phase == PHASE_OFF) {
@@ -669,33 +1277,28 @@ void SurvivorsClass::Draw_On_Field(Surface & surface)
 	FrameW = surface.Get_Width();
 	FrameH = surface.Get_Height();
 
-	if (Phase == PHASE_SIDE || Phase == PHASE_HERO) {
-		Draw_Choices(surface);
-		return;
+	switch (Phase) {
+		case PHASE_SIDE:
+		case PHASE_HERO:
+			Draw_Choices(surface);
+			break;
+
+		case PHASE_STAGE:
+			Draw_Stage(surface);
+			break;
+
+		case PHASE_CARD:
+			Draw_Run_Line(surface);
+			Draw_Cards(surface);
+			break;
+
+		default:
+			Draw_Run_Line(surface);
+			if (Phase == PHASE_EVAC) {
+				Draw_Evacuation(surface);
+			}
+			break;
 	}
-
-	if (Phase == PHASE_STAGE) {
-		Draw_Stage(surface);
-		return;
-	}
-
-	Rect whole(0, 0, surface.Get_Width(), surface.Get_Height());
-	char text[128];
-
-	int seconds = WaveTimer / TICKS_PER_SECOND;
-	if (seconds < 0) seconds = 0;
-
-	sprintf(text, "Волна %d   %d:%02d", Wave, seconds / 60, seconds % 60);
-
-	Fancy_Text_Print(text, surface, whole,
-		Point2D(surface.Get_Width() / 2, 10), Fetch_Scheme_By_Name("Green"), TBLACK,
-		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
-
-	sprintf(text, "Отряд %d   Врагов %d", Squad.Count(), Enemies_On_Field());
-
-	Fancy_Text_Print(text, surface, whole,
-		Point2D(surface.Get_Width() / 2, 22), Fetch_Scheme_By_Name("LightGrey"), TBLACK,
-		TextPrintType(TPF_CENTER|TPF_8POINT|TPF_FULLSHADOW));
 }
 
 
@@ -769,6 +1372,18 @@ bool SurvivorsClass::Click(Point2D const & screen)
 		return(true);
 	}
 
+	if (Phase == PHASE_CARD) {
+		for (int index = 0; index < 3; index++) {
+			Rect card = Card_Rect(index, 3, FrameH / 3, FrameH / 4);
+			if (screen.X >= card.X && screen.X < card.X + card.Width
+				&& screen.Y >= card.Y && screen.Y < card.Y + card.Height) {
+				Apply_Card(index);
+				return(true);
+			}
+		}
+		return(true);
+	}
+
 	if (Phase != PHASE_SIDE && Phase != PHASE_HERO) {
 		return(false);
 	}
@@ -776,7 +1391,7 @@ bool SurvivorsClass::Click(Point2D const & screen)
 	int count = (Phase == PHASE_SIDE) ? 3 : SIDE_HERO_COUNT[SideIndex];
 
 	for (int index = 0; index < count; index++) {
-		Rect card = Card_Rect(index, count);
+		Rect card = Card_Rect(index, count, FrameH / 4, FrameH / 8);
 		if (screen.X >= card.X && screen.X < card.X + card.Width
 			&& screen.Y >= card.Y && screen.Y < card.Y + card.Height) {
 			return(Choose(index));
