@@ -106,6 +106,8 @@ static CardInfo const CARDS[SurvivorsClass::EFFECT_COUNT] = {
 	{ "Строй", "Отряд держится ближе и не разбегается", SurvivorsClass::EFFECT_SHIELD },
 	{ "Магнит", "Тиберий втягивается с большего расстояния", SurvivorsClass::EFFECT_MAGNET },
 	{ "Притяжение", "Тиберий летит к герою быстрее", SurvivorsClass::EFFECT_PULL },
+	{ "Усиленные патроны", "Герой и отряд бьют сильнее", SurvivorsClass::EFFECT_AMMO },
+	{ "Композитная броня", "Герой и отряд держат удар лучше", SurvivorsClass::EFFECT_ARMOR },
 };
 
 
@@ -139,6 +141,8 @@ SurvivorsClass::SurvivorsClass(void) :
 	CardTimer(0),
 	LastWave(LAST_WAVE),
 	PhaseTimer(0),
+	DamageBias(1.0),
+	ArmorBias(1.0),
 	MagnetRadius(12),
 	PullStep(1),
 	TaskActive(false),
@@ -407,6 +411,17 @@ bool SurvivorsClass::Begin(void)
 	InfantryTypeClass const * hero_type = Pick_Infantry(PlayerPtr, unit_name, true);
 	Hero = Stand_Infantry(PlayerPtr, hero_type, origin);
 
+	/*
+	**`tThe hero holds his ground until he is told otherwise: the run is driven by the player,
+	**`tand a guard mission of his own would walk him about on its own.
+	*/
+	if (Hero != NULL) {
+		Hero->Assign_Mission(MISSION_STOP);
+		if (Hero->Ready_To_Commence()) {
+			Hero->Commence();
+		}
+	}
+
 	if (Hero == NULL) {
 		DebugString("Survivors: the hero could not be placed\n");
 		Finish("hero");
@@ -467,7 +482,12 @@ void SurvivorsClass::Add_To_Squad(int how_many)
 		if (man == NULL) {
 			continue;
 		}
-		man->Override_Mission(MISSION_GUARD, Hero, NULL);
+		man->Assign_Mission(MISSION_STOP);
+		if (man->Ready_To_Commence()) {
+			man->Commence();
+		}
+		man->FirepowerBias = DamageBias;
+		man->ArmorBias = ArmorBias;
 		Squad.Add(man);
 	}
 }
@@ -489,6 +509,25 @@ void SurvivorsClass::Mend(void)
 }
 
 
+/// <summary>
+/// Puts the improvements of the run onto the men it is being fought with: the engine already
+/// scales what they deal and what they take by these two biases, so nothing else is touched.
+/// </summary>
+void SurvivorsClass::Apply_Bias(void)
+{
+	if (Hero != NULL && Hero_Alive()) {
+		Hero->FirepowerBias = DamageBias;
+		Hero->ArmorBias = ArmorBias;
+	}
+
+	for (int index = 0; index < Squad.Count(); index++) {
+		TechnoClass * man = Squad[index];
+		if (man != NULL && On_Field(man)) {
+			man->FirepowerBias = DamageBias;
+			man->ArmorBias = ArmorBias;
+		}
+	}
+}
 /// <summary>Pulls a straggler back to the hero.</summary>
 void SurvivorsClass::Keep_Squad_Together(void)
 {
@@ -502,7 +541,14 @@ void SurvivorsClass::Keep_Squad_Together(void)
 			continue;
 		}
 		if (man->Distance(Hero->Center_Coord()) > SQUAD_LEASH * 256) {
-			man->Override_Mission(MISSION_GUARD, Hero, NULL);
+			/*
+			**	The order is a march to the hero's own cell: guarding him leaves the men standing
+			**	where they were, which is not following.
+			*/
+			man->Override_Mission(MISSION_MOVE, NULL, &Map[Hero->Center_Coord().As_Cell()]);
+			if (man->Ready_To_Commence()) {
+				man->Commence();
+			}
 		}
 	}
 }
@@ -797,12 +843,12 @@ void SurvivorsClass::Collect_Crystals(void)
 
 			for (int pull = 0; pull < PullStep; pull++) {
 				if (ax > 0) {
-					step.X += (dx > 0) ? 1 : -1;
+					step.X += (dx > 0) ? -1 : 1;
 					ax--;
 					dx += (dx > 0) ? -1 : 1;
 				}
 				if (ay > 0) {
-					step.Y += (dy > 0) ? 1 : -1;
+					step.Y += (dy > 0) ? -1 : 1;
 					ay--;
 					dy += (dy > 0) ? -1 : 1;
 				}
@@ -893,6 +939,16 @@ void SurvivorsClass::Apply_Card(int index)
 			PullStep++;
 			break;
 
+		case EFFECT_AMMO:
+			DamageBias *= 1.25;
+			Apply_Bias();
+			break;
+
+		case EFFECT_ARMOR:
+			ArmorBias *= 1.25;
+			Apply_Bias();
+			break;
+
 		case EFFECT_BREATHER:
 			if (WaveScale > 60) WaveScale -= 15;
 			break;
@@ -965,6 +1021,8 @@ void SurvivorsClass::Start_Task(void)
 {
 	Cell here = Hero_Cell();
 
+	DamageBias = 1.0;
+	ArmorBias = 1.0;
 	MagnetRadius = 12;
 	PhaseTimer = 0;
 	PullStep = 1;
@@ -1236,8 +1294,9 @@ void SurvivorsClass::Logic(void)
 
 		if (++StatusTimer >= 5) {
 			StatusTimer = 0;
-			DebugString("Survivors: state wave %d, level %d, xp %d/%d, crystals %d, kills %d, on the ground %d, nearest %d\n",
-				Wave, Level, Xp, XpNeeded, Crystals, Kills, Pickups.Count(), Nearest_Crystal());
+			DebugString("Survivors: state wave %d, level %d, xp %d/%d, crystals %d, kills %d, on the ground %d, nearest %d, hero %d,%d\n",
+				Wave, Level, Xp, XpNeeded, Crystals, Kills, Pickups.Count(), Nearest_Crystal(),
+				Hero_Cell().X, Hero_Cell().Y);
 		}
 	}
 

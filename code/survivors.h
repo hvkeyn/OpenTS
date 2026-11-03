@@ -60,6 +60,8 @@ class SurvivorsClass
 			EFFECT_SHIELD,		///< the squad is kept closer and steadier
 			EFFECT_MAGNET,		///< tiberium is pulled in from further off
 			EFFECT_PULL,		///< tiberium flies to the hero faster
+			EFFECT_AMMO,		///< the hero and his squad hit harder
+			EFFECT_ARMOR,		///< the hero and his squad take less
 			EFFECT_COUNT
 		};
 
@@ -99,6 +101,7 @@ class SurvivorsClass
 		void Open_Cards(void);
 		void Apply_Card(int index);
 		void Mend(void);
+		void Apply_Bias(void);
 		void Start_Evacuation(void);
 		void Start_Task(void);
 		void Watch_Task(void);
@@ -143,6 +146,8 @@ class SurvivorsClass
 		int CardTimer;
 		int StatusTimer;
 		int PhaseTimer;
+		double DamageBias;			///< how hard the player's men hit
+		double ArmorBias;			///< how well they stand up
 		int MagnetRadius;			///< how far the hero pulls tiberium in
 		int PullStep;				///< how fast it comes
 		int LastWave;
